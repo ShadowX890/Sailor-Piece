@@ -1,0 +1,3736 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+-- ตัวแปรสำหรับ Auto Farm
+local autoFarmRunning = false
+local currentTarget = nil
+local lastAttackTime = 0
+local attackCooldown = 0.2
+local hrp = nil
+
+-- ตัวแปรสำหรับ Auto Quest
+local lastQuestCheck = 0
+local questCheckInterval = 2
+local lastAcceptedQuest = nil
+
+-- ตัวแปรสำหรับ Auto Haki
+local VirtualInput = game:GetService("VirtualInputManager")
+local quest1Running = false
+local quest2Running = false
+local quest3Running = false
+local lastQuest1Time = 0
+local lastQuest2Time = 0
+local lastQuest3Time = 0
+local questCooldown = 0.2
+
+-- ตัวแปรสำหรับ Noclip
+local noclipConnection = nil
+
+-- ตัวแปรสำหรับเลือกอาวุธ
+local selectedWeapon = ""
+local weaponDropdown = nil
+
+-- ตัวแปรสำหรับ Auto Skill (แยก toggle แต่ละปุ่ม)
+local skillToggles = {
+    Z = false,
+    X = false,
+    C = false,
+    V = false,
+    B = false
+}
+local lastSkillPressTime = {
+    Z = 0,
+    X = 0,
+    C = 0,
+    V = 0,
+    B = 0
+}
+local skillPressCooldown = 0.5
+
+-- ตัวแปรสำหรับ Auto Haki (Buso และ Observation)
+local autoBusoHaki = false
+local autoObservationHaki = false
+
+-- ตัวแปรสำหรับตรวจสอบ Observation Haki
+local lastObservationCheck = 0
+local observationCheckCooldown = 1
+local lastObservationRemoteTime = 0
+local observationRemoteCooldown = 30
+local minRemoteInterval = 5
+local busoInitialized = false
+local observationInitialized = false
+
+-- ตัวแปรสำหรับ Auto Stats
+local autoStatsRunning = false
+local selectedStats = {}
+local statsAmount = 1
+local lastStatTime = 0
+local statCooldown = 0.5
+
+-- ตัวแปรสำหรับ Priority Loop
+local autoPriorityRunning = false
+local priorityLoopThread = nil
+local lastNoTargetNotify = 0
+local noTargetNotifyCooldown = 5
+
+-- ตัวแปรสำหรับ Auto Open Chest
+local autoOpenChestRunning = false
+local selectedChests = {}
+local chestList = {"Common Chest", "Rare Chest", "Epic Chest", "Legendary Chest", "Mythical Chest"}
+local openChestAmount = 1
+local lastOpenChestTime = 0
+local openChestCooldown = 1
+
+-- ตัวแปรสำหรับ Auto Dungeon
+local selectedDungeon = ""  -- เก็บค่าดันจ์ที่เลือก ("CidDungeon", "RuneDungeon", "DoubleDungeon")
+local autoDungeonRunning = false
+local autoLeaveDungeonRunning = false
+local lastDungeonAttempt = 0
+local dungeonCooldown = 10
+-- ตัวแปรสำหรับ In-Dungeon features
+local selectedDungeonDifficulty = "Easy"  -- ระดับความยากที่เลือก
+local autoVoteDifficultyRunning = false
+local autoKillDungeonMobsRunning = false
+local autoSafePlayerRunning = false
+local healthThreshold = 50  -- ค่าเริ่มต้น 50%
+local lastVoteTime = 0
+local voteCooldown = 5  -- ส่งโหวตทุก 5 วินาที
+local dungeonRespawnPoint = Vector3.new(200.586533, 91.022751, 11.037479)
+local safePlayerPosition = Vector3.new(200.223633, 351.271027, 28.078144)
+-- ตัวแปรสำหรับ Auto Replay
+local autoReplayRunning = false
+local lastReplayTime = 0
+local replayCooldown = 5   -- ส่ง request ทุก 5 วินาที
+
+-- ตัวแปรสำหรับ Auto Summon Boss
+local autoSummonRunning = false
+local selectedSummonBoss = "SaberBoss"
+local selectedDifficulty = "Normal"
+local summonBossList = {
+    { name = "SaberBoss", display = "Saber", hasDifficulty = false, remoteName = "RequestSummonBoss", args = {"SaberBoss"} },
+    { name = "QinShiBoss", display = "Qin Shi", hasDifficulty = false, remoteName = "RequestSummonBoss", args = {"QinShiBoss"} },
+    { name = "IchigoBoss", display = "Ichigo", hasDifficulty = false, remoteName = "RequestSummonBoss", args = {"IchigoBoss"} },
+    { name = "GilgameshBoss", display = "Gilgamesh", hasDifficulty = true, remoteName = "RequestSummonBoss", args = {"GilgameshBoss"} },
+    { name = "StrongestofTodayBoss", display = "Strongest Of Today", hasDifficulty = true, remoteName = "RequestSpawnStrongestBoss", args = {"StrongestToday"} },
+    { name = "StrongestinHistoryBoss", display = "Strongest In History", hasDifficulty = true, remoteName = "RequestSpawnStrongestBoss", args = {"StrongestHistory"} },
+    { name = "RimuruBoss", display = "Rimuru", hasDifficulty = true, remoteName = "RequestSpawnRimuru", args = {} },
+}
+local function getSummonInfoText(bossName, difficulty)
+    if bossName == "GilgameshBoss" then
+        if difficulty == "Normal" then return "1 Divine Grail, 500,000 Money, 500 Gems"
+        elseif difficulty == "Medium" then return "2 Divine Grail, 650,000 Money, 650 Gems"
+        elseif difficulty == "Hard" then return "3 Divine Grail, 750,000 Money, 750 Gems"
+        elseif difficulty == "Extreme" then return "4 Divine Grail, 1,000,000 Money, 1,000 Gems" end
+    elseif bossName == "StrongestofTodayBoss" then
+        local count = difficulty == "Normal" and "1" or difficulty == "Medium" and "2" or difficulty == "Hard" and "3" or "4"
+        return difficulty .. ": " .. count .. " Limitless Key"
+    elseif bossName == "StrongestinHistoryBoss" then
+        local count = difficulty == "Normal" and "1" or difficulty == "Medium" and "2" or difficulty == "Hard" and "3" or "4"
+        return difficulty .. ": " .. count .. " Malevolent Key"
+    elseif bossName == "RimuruBoss" then
+        local count = difficulty == "Normal" and "1" or difficulty == "Medium" and "2" or difficulty == "Hard" and "3" or "4"
+        return difficulty .. ": " .. count .. " Slime Key"
+    elseif bossName == "SaberBoss" then
+        return "1 boss key, 100,000 Money, 175 Gems"
+    elseif bossName == "QinShiBoss" then
+        return "3 boss key, 250,000 Money, 400 Gems"
+    elseif bossName == "IchigoBoss" then
+        return "5 boss key, 350,000 Money, 600 Gems"
+    else
+        return ""
+    end
+end
+local difficultyList = {"Normal", "Medium", "Hard", "Extreme"}
+local summonPosition = Vector3.new(796.259155, -0.897194, -1180.577637)
+local shinjukuSummonPosition = Vector3.new(354.713867, 97.159996, -2262.897949)
+local lastSummonTime = 0
+local summonCooldown = 10
+
+-- ข้อมูลเลเวล
+local dataFolder = player:WaitForChild("Data")
+local levelValue = dataFolder:WaitForChild("Level")
+
+-- โฟลเดอร์ NPCs
+local npcFolder = workspace:FindFirstChild("NPCs") or workspace:WaitForChild("NPCs", 5)
+if not npcFolder then
+    warn("ไม่พบโฟลเดอร์ NPCs ใน workspace")
+    return
+end
+
+-- Remote สำหรับตี
+local requestHit = ReplicatedStorage:WaitForChild("CombatSystem"):WaitForChild("Remotes"):WaitForChild("RequestHit")
+
+-- ตัวแปร UI
+local attackDistance = 8
+local floatHeight = 200
+local landHeight = 3
+
+-- กำหนดโหมดตามเลเวล
+local modes = {
+    { min = 0, max = 99, monsters = {"Thief1", "Thief5", "Thief4", "Thief3", "Thief2"}, questNPC = "QuestNPC1" },
+    { min = 100, max = 249, monsters = {"ThiefBoss"}, questNPC = "QuestNPC2" },
+    { min = 250, max = 499, monsters = {"Monkey1", "Monkey2", "Monkey3", "Monkey4", "Monkey5"}, questNPC = "QuestNPC3" },
+    { min = 500, max = 749, monsters = {"MonkeyBoss"}, questNPC = "QuestNPC4" },
+    { min = 750, max = 999, monsters = {"DesertBandit1", "DesertBandit2", "DesertBandit3", "DesertBandit4", "DesertBandit5"}, questNPC = "QuestNPC5" },
+    { min = 1000, max = 1499, monsters = {"DesertBoss"}, questNPC = "QuestNPC6" },
+    { min = 1500, max = 1999, monsters = {"FrostRogue1", "FrostRogue2", "FrostRogue3", "FrostRogue4", "FrostRogue5"}, questNPC = "QuestNPC7" },
+    { min = 2000, max = 2999, monsters = {"SnowBoss"}, questNPC = "QuestNPC8" },
+    { min = 3000, max = 3999, monsters = {"Sorcerer1", "Sorcerer2", "Sorcerer3", "Sorcerer4", "Sorcerer5"}, questNPC = "QuestNPC9" },
+    { min = 4000, max = 5000, monsters = {"PandaMiniBoss"}, questNPC = "QuestNPC10" },
+    { min = 5000, max = 6250, monsters = {"Hollow1", "Hollow2", "Hollow3", "Hollow4", "Hollow5"}, questNPC = "QuestNPC11" },
+    { min = 6250, max = 7000, monsters = {"StrongSorcerer1", "StrongSorcerer2", "StrongSorcerer3", "StrongSorcerer4", "StrongSorcerer5"}, questNPC = "QuestNPC12" },
+    { min = 7000, max = 8000, monsters = {"Curse1", "Curse2", "Curse3", "Curse4", "Curse5"}, questNPC = "QuestNPC13" },
+    { min = 8000, max = 9000, monsters = {"Slime1", "Slime2", "Slime3", "Slime4", "Slime5"}, questNPC = "QuestNPC14" },
+    { min = 9000, max = 10000, monsters = {"AcademyTeacher1", "AcademyTeacher2", "AcademyTeacher3", "AcademyTeacher4", "AcademyTeacher5"}, questNPC = "QuestNPC15" },
+}
+
+-- กลุ่มมอนสำหรับ Auto Farm Mob
+local mobGroupList = {
+    { name = "Thief", spawnKey = 0, monsters = {"Thief1","Thief2","Thief3","Thief4","Thief5"} },
+    { name = "Monkey", spawnKey = 250, monsters = {"Monkey1","Monkey2","Monkey3","Monkey4","Monkey5"} },
+    { name = "DesertBandit", spawnKey = 750, monsters = {"DesertBandit1","DesertBandit2","DesertBandit3","DesertBandit4","DesertBandit5"} },
+    { name = "FrostRogue", spawnKey = 1500, monsters = {"FrostRogue1","FrostRogue2","FrostRogue3","FrostRogue4","FrostRogue5"} },
+    { name = "Sorcerer", spawnKey = 3000, monsters = {"Sorcerer1","Sorcerer2","Sorcerer3","Sorcerer4","Sorcerer5"} },
+    { name = "Hollow", spawnKey = 5000, monsters = {"Hollow1","Hollow2","Hollow3","Hollow4","Hollow5"} },
+    { name = "StrongSorcerer", spawnKey = 6250, monsters = {"StrongSorcerer1","StrongSorcerer2","StrongSorcerer3","StrongSorcerer4","StrongSorcerer5"} },
+    { name = "Curse", spawnKey = 7000, monsters = {"Curse1","Curse2","Curse3","Curse4","Curse5"} },
+    { name = "Slime", spawnKey = 8000, monsters = {"Slime1","Slime2","Slime3","Slime4","Slime5"} },
+    { name = "AcademyTeacher", spawnKey = 9000, monsters = {"AcademyTeacher1","AcademyTeacher2","AcademyTeacher3","AcademyTeacher4","AcademyTeacher5"} },
+    --{ name = "Cupid Striker", spawnKey = 10000, monsters = {"Valentine1","Valentine2","Valentine3","Valentine4","Valentine5"} },
+}
+local mobGroupNames = {}
+for _, g in ipairs(mobGroupList) do table.insert(mobGroupNames, g.name) end
+
+-- ตัวแปรสำหรับ Auto Farm Mob
+local autoMobRunning = false
+local selectedMobGroups = {}
+
+-- รายชื่อบอสและตำแหน่ง spawn
+local bossList = {
+    { name = "YujiBoss", display = "Yuji Boss", spawnPos = Vector3.new(1659.865356, 185.061035, 36.619400) },
+    { name = "SukunaBoss", display = "Sukuna Boss", spawnPos = Vector3.new(1659.865356, 185.061035, 36.619400) },
+    { name = "GojoBoss", display = "Gojo Boss", spawnPos = Vector3.new(1659.865356, 185.061035, 36.619400) },
+    { name = "JinwooBoss", display = "Jinwoo Boss", spawnPos = Vector3.new(249.031830, 166.316544, 916.186401) },
+    { name = "AizenBoss", display = "Aizen Boss", spawnPos = Vector3.new(-570.791687, 98.074898, 1265.189697) },
+    { name = "AlucardBoss", display = "Alucard Boss", spawnPos = Vector3.new(249.031830, 166.316544, 916.186401) },
+    --{ name = "MadokaBoss", display = "Madoka Boss", spawnPos = Vector3.new(-1293.987061, 39.018612, -1133.032959) },
+    { name = "SaberBoss", display = "Saber Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
+    { name = "QinShiBoss", display = "Qin Shi Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
+    { name = "IchigoBoss", display = "Ichigo Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
+    { name = "GilgameshBoss", display = "Gilgamesh Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
+    { name = "StrongestofTodayBoss", display = "Strongest Of Today", spawnPos = Vector3.new(354.713867, 97.159996, -2262.897949) },
+    { name = "StrongestinHistoryBoss", display = "Strongest In History", spawnPos = Vector3.new(354.713867, 97.159996, -2262.897949) },
+    { name = "RimuruBoss", display = "Rimuru Boss", spawnPos = Vector3.new(354.713867, 97.159996, -2262.897949) },
+}
+local bossNames = {}
+for _, b in ipairs(bossList) do table.insert(bossNames, b.display) end
+
+-- ตัวแปรสำหรับ Auto Farm Bosses
+local autoBossRunning = false
+local selectedBosses = {}
+
+-- สำหรับควบคุมความถี่ในการแจ้งเตือนบอส
+local lastBossNotify = {}
+local bossNotifyCooldown = 5
+local lastNoBossNotify = 0
+
+-- ========== ระบบ Spawn Position ==========
+local spawnPositions = {
+    [0]   = Vector3.new(164.981308, 16.329741, -215.994843),
+    [100] = Vector3.new(-7.286695, -2.584255, -196.514816),
+    [250] = Vector3.new(-515.602844, -1.045176, 426.184021),
+    [500] = Vector3.new(-475.355804, 35.127792, 484.993256),
+    [750] = Vector3.new(-850.394897, 6.777895, -440.760315),
+    [1000] = Vector3.new(-850.394897, 6.777895, -440.760315),
+    [1500] = Vector3.new(-493.497192, 13.393859, -1016.845459),
+    [2000] = Vector3.new(-493.497192, 13.393859, -1016.845459),
+    [3000] = Vector3.new(1545.346802, 192.029892, 543.079651),
+    [4000] = Vector3.new(1545.346802, 192.029892, 543.079651),
+    [5000] = Vector3.new(-536.010742, 96.507858, 1312.952881),
+    [6250] = Vector3.new(281.741974, -1.539048, -1858.489136),
+    [7000] = Vector3.new(281.741974, -1.539048, -1858.489136),
+    [8000] = Vector3.new(-1161.896729, 38.032673, 257.935913),
+    [9000] = Vector3.new(1046.250854, 66.662331, 1351.482910),
+    [10000] = Vector3.new(-1293.987061, 39.018612, -1133.032959),
+}
+
+local function getSpawnCFrame(level)
+    for _, mode in ipairs(modes) do
+        if level >= mode.min and level <= mode.max then
+            local pos = spawnPositions[mode.min]
+            if pos and pos.Magnitude > 0 then
+                return CFrame.new(pos) * CFrame.new(0, 3, 0)
+            end
+            break
+        end
+    end
+    local spawnPoint = workspace:FindFirstChild("StarterIsland") and workspace.StarterIsland:FindFirstChild("SpawnPointCrystal_Starter")
+    if spawnPoint then
+        return spawnPoint.CFrame * CFrame.new(0, 3, 0)
+    end
+    return CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z)
+end
+
+-- ตัวแปรสำหรับ Auto Slime Piece
+local autoSlimePieceRunning = false
+local slimePieceLocations = {
+    { name = "DesertIsland", pos = Vector3.new(-850.394897, 6.777895, -440.760315) },  -- พิกัดกลางเกาะ Desert
+    { name = "SnowIsland", pos = Vector3.new(-493.497192, 13.393859, -1016.845459) },
+    { name = "StarterIsland", pos = Vector3.new(164.981308, 16.329741, -215.994843) },
+    { name = "JungleIsland", pos = Vector3.new(-515.602844, -1.045176, 426.184021) },
+    { name = "ShibuyaStation", pos = Vector3.new(1545.346802, 192.029892, 543.079651) },
+    { name = "HuecoMundo", pos = Vector3.new(-536.010742, 96.507858, 1312.952881) },
+    { pos = Vector3.new(787.80126953125, 64.3216552734375, -2309.12841796875), name = "Final Spot" },
+}
+
+
+-- ตัวแปรสำหรับ Player Settings (เพิ่ม default)
+local walkSpeedEnabled = false
+local customWalkSpeed = 16  -- ค่าเริ่มต้นคร่าว ๆ (จะถูกแทนที่ด้วยค่าจริงตอนเปิด toggle)
+local defaultWalkSpeed = 16  -- เก็บค่าเริ่มต้นของเกม
+local jumpPowerEnabled = false
+local customJumpPower = 50
+local defaultJumpPower = 50
+local infiniteJumpEnabled = false
+local noclipEnabled = false
+local flyEnabled = false
+local flySpeed = 20
+local flyConnection = nil
+local infiniteJumpConnection = nil
+local UserInputService = game:GetService("UserInputService")
+
+-- =======================================
+
+local function getKeyCode(skillName)
+    if skillName == "Z" then return Enum.KeyCode.Z
+    elseif skillName == "X" then return Enum.KeyCode.X
+    elseif skillName == "C" then return Enum.KeyCode.C
+    elseif skillName == "V" then return Enum.KeyCode.V
+    elseif skillName == "B" then return Enum.KeyCode.B
+    else return nil end
+end
+
+local function acceptQuest(questNPC)
+    local args = { [1] = questNPC }
+    ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("QuestAccept"):FireServer(unpack(args))
+    lastAcceptedQuest = questNPC
+end
+
+local function enableNoclip()
+    if noclipConnection then return end
+    noclipConnection = RunService.Stepped:Connect(function()
+        if player.Character then
+            for _, v in pairs(player.Character:GetDescendants()) do
+                if v:IsA("BasePart") and v.CanCollide then
+                    v.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+end
+
+local function safelyLand()
+    if not hrp then return end
+    hrp.CFrame = hrp.CFrame - Vector3.new(0, landHeight, 0)
+    hrp.Velocity = Vector3.zero
+    hrp.AssemblyLinearVelocity = Vector3.zero
+    hrp.Anchored = false
+end
+
+local function updateWeaponDropdown()
+    if not weaponDropdown then return end
+    local weapons = {}
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(weapons, tool.Name)
+            end
+        end
+    end
+    local methods = {"Set", "SetValues", "Update", "SetOptions", "Refresh"}
+    for _, methodName in ipairs(methods) do
+        local method = weaponDropdown[methodName]
+        if method then
+            local success = pcall(method, weaponDropdown, weapons)
+            if success then break end
+        end
+    end
+end
+
+local function setupBackpackListener()
+    local backpack = player:WaitForChild("Backpack")
+    updateWeaponDropdown()
+    backpack.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then updateWeaponDropdown() end
+    end)
+    backpack.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") then updateWeaponDropdown() end
+    end)
+end
+
+local function equipWeapon(weaponName)
+    if weaponName == "" then return end
+    local backpack = player:FindFirstChild("Backpack")
+    if not backpack then return end
+    local tool = backpack:FindFirstChild(weaponName)
+    if tool and tool:IsA("Tool") then
+        local character = player.Character
+        if character then
+            tool.Parent = character
+        end
+    end
+end
+
+local function onCharacterAdded(newChar)
+    hrp = newChar:WaitForChild("HumanoidRootPart")
+    currentTarget = nil
+
+    local humanoid = newChar:WaitForChild("Humanoid")
+    if walkSpeedEnabled then
+        humanoid.WalkSpeed = customWalkSpeed
+    end
+    if jumpPowerEnabled then
+        humanoid.JumpPower = customJumpPower
+    end
+    if noclipEnabled then
+        enableNoclip()
+    end
+
+    if autoFarmRunning or autoMobRunning or autoBossRunning then
+        task.wait(1)
+
+        if autoBusoHaki then
+            task.wait(0.3)
+            local args = { "Toggle" }
+            local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("HakiRemote")
+            if remote then
+                remote:FireServer(unpack(args))
+            end
+        end
+        if autoObservationHaki then
+            task.wait(0.3)
+            local args = { "Toggle" }
+            local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ObservationHakiRemote")
+            if remote then
+                remote:FireServer(unpack(args))
+            end
+        end
+
+        -- เฉพาะ Auto Farm Level เท่านั้นที่ต้องหาเป้าหมายใหม่ที่นี่
+        if autoFarmRunning then
+            local level = levelValue.Value
+            local currentMode = nil
+            for _, mode in ipairs(modes) do
+                if level >= mode.min and level <= mode.max then
+                    currentMode = mode
+                    break
+                end
+            end
+
+            if currentMode then
+                local lowestHealth = math.huge
+                local bestTarget = nil
+                for _, monsterName in ipairs(currentMode.monsters) do
+                    local monster = npcFolder:FindFirstChild(monsterName)
+                    if monster then
+                        local humanoid = monster:FindFirstChild("Humanoid")
+                        local monRoot = monster:FindFirstChild("HumanoidRootPart")
+                        if humanoid and humanoid.Health > 0 and monRoot then
+                            if humanoid.Health < lowestHealth then
+                                lowestHealth = humanoid.Health
+                                bestTarget = monster
+                            end
+                        end
+                    end
+                end
+                if bestTarget then
+                    currentTarget = bestTarget
+                end
+            end
+        end
+
+        if selectedWeapon ~= "" then
+            equipWeapon(selectedWeapon)
+        end
+    end
+
+    updateWeaponDropdown()
+end
+
+player.CharacterAdded:Connect(onCharacterAdded)
+if player.Character then
+    onCharacterAdded(player.Character)
+end
+
+local function autoFarmLoop()
+    local success, err = pcall(function()
+        while autoFarmRunning do
+            if not hrp then
+                local char = player.Character
+                if char then
+                    hrp = char:FindFirstChild("HumanoidRootPart")
+                end
+                if not hrp then
+                    RunService.Heartbeat:Wait()
+                    continue
+                end
+            end
+
+            if selectedWeapon ~= "" then
+                local character = player.Character
+                if character then
+                    local toolInHand = character:FindFirstChild(selectedWeapon)
+                    if not toolInHand then
+                        local backpack = player:FindFirstChild("Backpack")
+                        if backpack then
+                            local tool = backpack:FindFirstChild(selectedWeapon)
+                            if tool and tool:IsA("Tool") then
+                                tool.Parent = character
+                            end
+                        end
+                    end
+                end
+            end
+
+            local now = tick()
+            local level = levelValue.Value
+            local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+            local questFrame = questUI and questUI:FindFirstChild("Quest")
+
+            -- 🔁 ตรวจสอบ Observation Haki ถ้าเปิดใช้งาน
+            if autoObservationHaki and autoFarmRunning then
+                if now >= lastObservationCheck + observationCheckCooldown then
+                    local cooldownUI = player.PlayerGui:FindFirstChild("CooldownUI")
+                    local inCooldown = false
+                    if cooldownUI then
+                        local mainFrame = cooldownUI:FindFirstChild("MainFrame")
+                        if mainFrame then
+                            local obsCooldown = mainFrame:FindFirstChild("Cooldown_ObsHaki_Observation")
+                            if obsCooldown then
+                                inCooldown = true
+                            end
+                        end
+                    end
+
+                    local dodgeUI = player.PlayerGui:FindFirstChild("DodgeCounterUI")
+                    local hakiOn = false
+                    if dodgeUI then
+                        local mainFrame = dodgeUI:FindFirstChild("MainFrame")
+                        if mainFrame and mainFrame.Visible then
+                            hakiOn = true
+                        end
+                    end
+
+                    if not inCooldown and not hakiOn then
+                        if now >= lastObservationRemoteTime + minRemoteInterval then
+                            local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ObservationHakiRemote")
+                            if remote then
+                                pcall(function()
+                                    remote:FireServer({ "Toggle" })
+                                end)
+                                lastObservationRemoteTime = now
+                            end
+                        end
+                    end
+
+                    lastObservationCheck = now
+                end
+            end
+
+            local currentMode = nil
+            for _, mode in ipairs(modes) do
+                if level >= mode.min and level <= mode.max then
+                    currentMode = mode
+                    break
+                end
+            end
+
+            if not currentMode then
+                WindUI:Notify({
+                    Title = "⚠️ เลเวลเกิน",
+                    Content = "เลเวลของคุณเกิน 10000 แล้ว หยุด Auto Farm",
+                    Duration = 5,
+                    Icon = "alert-triangle",
+                })
+                autoFarmRunning = false
+                break
+            end
+
+            if questFrame then
+                local shouldAccept = false
+                if not questFrame.Visible then
+                    shouldAccept = true
+                else
+                    if currentMode.questNPC ~= lastAcceptedQuest then
+                        shouldAccept = true
+                    end
+                end
+
+                if shouldAccept and now >= lastQuestCheck + questCheckInterval then
+                    acceptQuest(currentMode.questNPC)
+                    lastQuestCheck = now
+                end
+            end
+
+            if questFrame and questFrame.Visible then
+                local targetAlive = false
+                if currentTarget and currentTarget.Parent == npcFolder then
+                    local humanoid = currentTarget:FindFirstChild("Humanoid")
+                    local monRoot = currentTarget:FindFirstChild("HumanoidRootPart")
+                    if humanoid and humanoid.Health > 0 and monRoot then
+                        local valid = false
+                        for _, mName in ipairs(currentMode.monsters) do
+                            if mName == currentTarget.Name then
+                                valid = true
+                                break
+                            end
+                        end
+                        if valid then
+                            targetAlive = true
+                        else
+                            currentTarget = nil
+                        end
+                    else
+                        currentTarget = nil
+                    end
+                end
+
+                if targetAlive then
+                    local monRoot = currentTarget:FindFirstChild("HumanoidRootPart")
+                    if not monRoot then
+                        currentTarget = nil
+                        hrp.CFrame = getSpawnCFrame(level)
+                        hrp.Anchored = true
+                        hrp.Velocity = Vector3.zero
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        RunService.Heartbeat:Wait()
+                        continue
+                    end
+                    local behindPos = monRoot.Position + monRoot.CFrame.LookVector * -attackDistance
+                    hrp.CFrame = CFrame.lookAt(behindPos, monRoot.Position)
+                    hrp.Anchored = false
+
+                    if now >= lastAttackTime + attackCooldown then
+                        requestHit:FireServer()
+                        lastAttackTime = now
+                    end
+
+                    for skillName, enabled in pairs(skillToggles) do
+                        if enabled then
+                            local lastTime = lastSkillPressTime[skillName] or 0
+                            if now >= lastTime + skillPressCooldown then
+                                local keyCode = getKeyCode(skillName)
+                                if keyCode then
+                                    VirtualInput:SendKeyEvent(true, keyCode, false, game)
+                                    task.wait(0.05)
+                                    VirtualInput:SendKeyEvent(false, keyCode, false, game)
+                                    lastSkillPressTime[skillName] = now
+                                end
+                            end
+                        end
+                    end
+
+                else
+                    currentTarget = nil
+                    for _, monsterName in ipairs(currentMode.monsters) do
+                        local monster = npcFolder:FindFirstChild(monsterName)
+                        if monster then
+                            local humanoid = monster:FindFirstChild("Humanoid")
+                            local monRoot = monster:FindFirstChild("HumanoidRootPart")
+                            if humanoid and humanoid.Health > 0 and monRoot then
+                                currentTarget = monster
+                                break
+                            end
+                        end
+                    end
+
+                    if currentTarget then
+                        local monRoot = currentTarget:FindFirstChild("HumanoidRootPart")
+                        if monRoot then
+                            local behindPos = monRoot.Position + monRoot.CFrame.LookVector * -attackDistance
+                            hrp.CFrame = CFrame.lookAt(behindPos, monRoot.Position)
+                        end
+                        hrp.Anchored = false
+                    else
+                        hrp.CFrame = getSpawnCFrame(level)
+                        hrp.Anchored = true
+                        hrp.Velocity = Vector3.zero
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                    end
+                end
+            else
+                hrp.CFrame = getSpawnCFrame(level)
+                currentTarget = nil
+                hrp.Anchored = true
+                hrp.Velocity = Vector3.zero
+                hrp.AssemblyLinearVelocity = Vector3.zero
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+    end)
+    if not success then
+        warn("autoFarmLoop error:", err)
+    end
+
+    safelyLand()
+    disableNoclip()
+    if hrp then
+        hrp.Anchored = false
+    end
+end
+
+-- ฟังก์ชันค้นหาเป้าหมายบอส
+local function findBossTarget()
+    for _, boss in ipairs(selectedBosses) do
+        for _, monster in ipairs(npcFolder:GetChildren()) do
+            if monster.Name:find("^" .. boss.name) then
+                local humanoid = monster:FindFirstChild("Humanoid")
+                local monRoot = monster:FindFirstChild("HumanoidRootPart")
+                if humanoid and monRoot and humanoid.Health > 0 then
+                    return monster
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- ฟังก์ชันค้นหาเป้าหมาย mob
+local function findMobTarget()
+    for _, group in ipairs(selectedMobGroups) do
+        for _, monsterName in ipairs(group.monsters) do
+            local monster = npcFolder:FindFirstChild(monsterName)
+            if monster then
+                local humanoid = monster:FindFirstChild("Humanoid")
+                local monRoot = monster:FindFirstChild("HumanoidRootPart")
+                if humanoid and monRoot and humanoid.Health > 0 then
+                    return monster
+                end
+            end
+        end
+    end
+    return nil
+end
+
+-- ฟังก์ชัน Priority Loop (รวม Boss และ Mob)
+local function autoPriorityLoop()
+    print("autoPriorityLoop started")
+    local currentSpawnIndex = 1
+    local lastWarpTime = 0
+    local warpCooldown = 5
+
+    local function getUniqueBossSpawns()
+        local unique = {}
+        local seen = {}
+        for _, boss in ipairs(selectedBosses) do
+            local key = string.format("%.3f,%.3f,%.3f", boss.spawnPos.X, boss.spawnPos.Y, boss.spawnPos.Z)
+            if not seen[key] then
+                seen[key] = true
+                table.insert(unique, boss.spawnPos)
+            end
+        end
+        return unique
+    end
+
+    local success, err = pcall(function()
+        while autoPriorityRunning do
+            if not hrp then
+                local char = player.Character
+                if char then
+                    hrp = char:FindFirstChild("HumanoidRootPart")
+                end
+                if not hrp then
+                    RunService.Heartbeat:Wait()
+                    continue
+                end
+            end
+
+            if selectedWeapon ~= "" then
+                local character = player.Character
+                if character then
+                    local toolInHand = character:FindFirstChild(selectedWeapon)
+                    if not toolInHand then
+                        local backpack = player:FindFirstChild("Backpack")
+                        if backpack then
+                            local tool = backpack:FindFirstChild(selectedWeapon)
+                            if tool and tool:IsA("Tool") then
+                                tool.Parent = character
+                            end
+                        end
+                    end
+                end
+            end
+
+            local now = tick()
+
+            if autoObservationHaki then
+                if now >= lastObservationCheck + observationCheckCooldown then
+                    local cooldownUI = player.PlayerGui:FindFirstChild("CooldownUI")
+                    local inCooldown = false
+                    if cooldownUI then
+                        local mainFrame = cooldownUI:FindFirstChild("MainFrame")
+                        if mainFrame then
+                            local obsCooldown = mainFrame:FindFirstChild("Cooldown_ObsHaki_Observation")
+                            if obsCooldown then inCooldown = true end
+                        end
+                    end
+                    local dodgeUI = player.PlayerGui:FindFirstChild("DodgeCounterUI")
+                    local hakiOn = false
+                    if dodgeUI then
+                        local mainFrame = dodgeUI:FindFirstChild("MainFrame")
+                        if mainFrame and mainFrame.Visible then hakiOn = true end
+                    end
+                    if not inCooldown and not hakiOn then
+                        if now >= lastObservationRemoteTime + minRemoteInterval then
+                            local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ObservationHakiRemote")
+                            if remote then
+                                pcall(function() remote:FireServer({ "Toggle" }) end)
+                                lastObservationRemoteTime = now
+                            end
+                        end
+                    end
+                    lastObservationCheck = now
+                end
+            end
+
+            if autoBossRunning and #selectedBosses > 0 and not currentTarget then
+                if now >= lastWarpTime + 1 then
+                    local firstBoss = selectedBosses[1]
+                    if firstBoss and firstBoss.spawnPos then
+                        hrp.CFrame = CFrame.new(firstBoss.spawnPos) * CFrame.new(0, 3, 0)
+                        lastWarpTime = now
+                    end
+                end
+            end
+
+            local target = nil
+            if autoBossRunning then
+                target = findBossTarget()
+            end
+            if not target and autoMobRunning then
+                target = findMobTarget()
+            end
+
+            if target then
+                currentTarget = target
+                currentSpawnIndex = 1
+                local monRoot = currentTarget:FindFirstChild("HumanoidRootPart")
+                if not monRoot then
+                    currentTarget = nil
+                    RunService.Heartbeat:Wait()
+                    continue
+                end
+                local behindPos = monRoot.Position + monRoot.CFrame.LookVector * -attackDistance
+                hrp.CFrame = CFrame.lookAt(behindPos, monRoot.Position)
+                hrp.Anchored = false
+
+                if now >= lastAttackTime + attackCooldown then
+                    requestHit:FireServer()
+                    lastAttackTime = now
+                end
+
+                for skillName, enabled in pairs(skillToggles) do
+                    if enabled then
+                        local lastTime = lastSkillPressTime[skillName] or 0
+                        if now >= lastTime + skillPressCooldown then
+                            local keyCode = getKeyCode(skillName)
+                            if keyCode then
+                                VirtualInput:SendKeyEvent(true, keyCode, false, game)
+                                task.wait(0.05)
+                                VirtualInput:SendKeyEvent(false, keyCode, false, game)
+                                lastSkillPressTime[skillName] = now
+                            end
+                        end
+                    end
+                end
+            else
+                if autoBossRunning and #selectedBosses > 0 then
+                    local uniqueSpawn = getUniqueBossSpawns()
+                    if #uniqueSpawn > 0 then
+                        if now >= lastWarpTime + warpCooldown then
+                            local pos = uniqueSpawn[currentSpawnIndex]
+                            if pos then
+                                hrp.CFrame = CFrame.new(pos) * CFrame.new(0, 3, 0)
+                            else
+                                hrp.CFrame = getSpawnCFrame(levelValue.Value)
+                            end
+                            currentSpawnIndex = currentSpawnIndex + 1
+                            if currentSpawnIndex > #uniqueSpawn then
+                                currentSpawnIndex = 1
+                            end
+                            lastWarpTime = now
+                        end
+                        hrp.Anchored = true
+                        hrp.Velocity = Vector3.zero
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                    else
+                        hrp.CFrame = getSpawnCFrame(levelValue.Value)
+                        hrp.Anchored = true
+                        hrp.Velocity = Vector3.zero
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                    end
+                elseif autoMobRunning and #selectedMobGroups > 0 then
+                    local key = selectedMobGroups[1].spawnKey
+                    local pos = spawnPositions[key]
+                    if pos then
+                        hrp.CFrame = CFrame.new(pos) * CFrame.new(0, 3, 0)
+                    else
+                        hrp.CFrame = getSpawnCFrame(levelValue.Value)
+                    end
+                    hrp.Anchored = true
+                    hrp.Velocity = Vector3.zero
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                else
+                    hrp.CFrame = getSpawnCFrame(levelValue.Value)
+                    hrp.Anchored = true
+                    hrp.Velocity = Vector3.zero
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                end
+
+                if now - lastNoTargetNotify >= bossNotifyCooldown then
+                    lastNoTargetNotify = now
+                    WindUI:Notify({
+                        Title = "No Targets Available",
+                        Content = "No bosses or mobs are spawned",
+                        Duration = 2,
+                        Icon = "info",
+                    })
+                end
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+    end)
+    if not success then
+        warn("autoPriorityLoop error:", err)
+    end
+
+    safelyLand()
+    disableNoclip()
+    if hrp then
+        hrp.Anchored = false
+    end
+end
+
+-- ฟังก์ชันอัปเดต Priority Loop
+local function updatePriorityLoop()
+    local shouldRun = (autoBossRunning and #selectedBosses > 0) or (autoMobRunning and #selectedMobGroups > 0)
+    if shouldRun and not autoPriorityRunning then
+        autoPriorityRunning = true
+        enableNoclip()
+        if selectedWeapon ~= "" then
+            equipWeapon(selectedWeapon)
+        end
+        priorityLoopThread = spawn(autoPriorityLoop)
+    elseif not shouldRun and autoPriorityRunning then
+        autoPriorityRunning = false
+    end
+end
+
+local function autoMobLoop()
+    -- (ไม่ได้ใช้แล้ว แต่คงไว้)
+end
+
+local function autoBossLoop()
+    -- (ไม่ได้ใช้แล้ว แต่คงไว้)
+end
+
+local function quest1Loop()
+    while quest1Running do
+        if not hrp then
+            local char = player.Character
+            if char then
+                hrp = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not hrp then
+                RunService.Heartbeat:Wait()
+                continue
+            end
+        end
+
+        local now = tick()
+        local killMode = modes[1]
+        local target = nil
+        for _, monsterName in ipairs(killMode.monsters) do
+            local monster = npcFolder:FindFirstChild(monsterName)
+            if monster then
+                local humanoid = monster:FindFirstChild("Humanoid")
+                local monRoot = monster:FindFirstChild("HumanoidRootPart")
+                if humanoid and humanoid.Health > 0 and monRoot then
+                    target = monster
+                    break
+                end
+            end
+        end
+
+        if target then
+            local monRoot = target:FindFirstChild("HumanoidRootPart")
+            if monRoot then
+                local behindPos = monRoot.Position + monRoot.CFrame.LookVector * -attackDistance
+                hrp.CFrame = CFrame.lookAt(behindPos, monRoot.Position)
+            end
+            hrp.Anchored = false
+
+            if now >= lastQuest1Time + questCooldown then
+                requestHit:FireServer()
+                lastQuest1Time = now
+            end
+        else
+            hrp.CFrame = CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z)
+            hrp.Anchored = true
+            hrp.Velocity = Vector3.zero
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        RunService.Heartbeat:Wait()
+    end
+end
+
+local function quest2Loop()
+    while quest2Running do
+        local now = tick()
+        if now >= lastQuest2Time + questCooldown then
+            VirtualInput:SendKeyEvent(true, Enum.KeyCode.Z, false, game)
+            task.wait(0.05)
+            VirtualInput:SendKeyEvent(false, Enum.KeyCode.Z, false, game)
+            lastQuest2Time = now
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+local function quest3Loop()
+    while quest3Running do
+        local now = tick()
+        if now >= lastQuest3Time + questCooldown then
+            requestHit:FireServer()
+            lastQuest3Time = now
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+local function allocateStat(statName, amount)
+    local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("AllocateStat")
+    if not remote then
+        warn("AllocateStat remote not found")
+        return
+    end
+    for i = 1, amount do
+        local args = { statName, 1 }
+        remote:FireServer(unpack(args))
+        task.wait(0.05)
+    end
+end
+
+local function autoStatsLoop()
+    while autoStatsRunning do
+        local now = tick()
+        if now >= lastStatTime + statCooldown then
+            if #selectedStats == 0 then
+                autoStatsRunning = false
+                break
+            end
+            for _, stat in ipairs(selectedStats) do
+                if not autoStatsRunning then break end
+                allocateStat(stat, statsAmount)
+                lastStatTime = now
+                task.wait(0.1)
+            end
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- ฟังก์ชัน Auto Summon Loop
+local function autoSummonLoop()
+    print("autoSummonLoop started")
+    local success, err = pcall(function()
+        while autoSummonRunning do
+            if not hrp then
+                local char = player.Character
+                if char then
+                    hrp = char:FindFirstChild("HumanoidRootPart")
+                end
+                if not hrp then
+                    RunService.Heartbeat:Wait()
+                    continue
+                end
+            end
+
+            local now = tick()
+            local bossData = nil
+            for _, b in ipairs(summonBossList) do
+                if b.name == selectedSummonBoss then
+                    bossData = b
+                    break
+                end
+            end
+
+            if not bossData then
+                warn("Unknown summon boss:", selectedSummonBoss)
+                RunService.Heartbeat:Wait()
+                continue
+            end
+
+            local bossExists = false
+            for _, monster in ipairs(npcFolder:GetChildren()) do
+                if monster.Name:find("^" .. selectedSummonBoss) then
+                    local humanoid = monster:FindFirstChild("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        bossExists = true
+                        break
+                    end
+                end
+            end
+
+            if not bossExists then
+                if now >= lastSummonTime + summonCooldown then
+                    if bossData.remoteName == "RequestSpawnStrongestBoss" then
+                        hrp.CFrame = CFrame.new(shinjukuSummonPosition) * CFrame.new(0, 3, 0)
+                    else
+                        hrp.CFrame = CFrame.new(summonPosition) * CFrame.new(0, 3, 0)
+                    end
+                    task.wait(1)
+
+                    local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild(bossData.remoteName)
+                    if remote then
+                        if bossData.remoteName == "RequestSpawnRimuru" then
+                            local args = { selectedDifficulty }
+                            remote:FireServer(unpack(args))
+                        elseif bossData.hasDifficulty then
+                            local args = { bossData.args[1], selectedDifficulty }
+                            remote:FireServer(unpack(args))
+                        else
+                            local args = bossData.args
+                            remote:FireServer(unpack(args))
+                        end
+                        lastSummonTime = now
+                        WindUI:Notify({
+                            Title = "Summon",
+                            Content = "Summoned " .. bossData.display,
+                            Duration = 2,
+                            Icon = "info",
+                        })
+                    else
+                        warn(bossData.remoteName .. " remote not found")
+                    end
+                end
+            end
+
+            RunService.Heartbeat:Wait()
+        end
+    end)
+    if not success then
+        warn("autoSummonLoop error:", err)
+    end
+    print("autoSummonLoop ended")
+end
+
+-- ฟังก์ชัน Auto Chest Loop
+local function autoOpenChestLoop()
+    print("autoOpenChestLoop started")
+    local success, err = pcall(function()
+        while autoOpenChestRunning do
+            local now = tick()
+            if now >= lastOpenChestTime + openChestCooldown then
+                local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("UseItem")
+                if remote then
+                    for _, chestName in ipairs(selectedChests) do
+                        local args = { "Use", chestName, openChestAmount }
+                        remote:FireServer(unpack(args))
+                        task.wait(0.1)
+                    end
+                    lastOpenChestTime = now
+                else
+                    warn("UseItem remote not found")
+                end
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end)
+    if not success then
+        warn("autoOpenChestLoop error:", err)
+    end
+    print("autoOpenChestLoop ended")
+end
+
+-- ฟังก์ชันสำหรับ Teleport ไปยัง NPC (รับชื่อ NPC)
+local function teleportToNPC(npcName)
+    local npc = workspace:FindFirstChild("ServiceNPCs") and workspace.ServiceNPCs:FindFirstChild(npcName)
+    if not npc then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "ไม่พบ NPC: " .. tostring(npcName),
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+    if not hrp then
+        local char = player.Character
+        if char then hrp = char:FindFirstChild("HumanoidRootPart") end
+    end
+    if hrp then
+        hrp.CFrame = npc:GetPivot() * CFrame.new(0, 3, 0)
+        WindUI:Notify({
+            Title = "Teleported",
+            Content = "ไปยัง " .. npcName,
+            Duration = 2,
+            Icon = "check",
+        })
+        return true
+    end
+    return false
+end
+
+-- ฟังก์ชันแสดงข้อมูล Summon Boss (Frame ใหม่)
+local function showSummonInfoFrame()
+    -- ลบหน้าต่างเก่า
+    local existing = player.PlayerGui:FindFirstChild("SummonInfoGui")
+    if existing then existing:Destroy() end
+
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SummonInfoGui"
+    screenGui.Parent = player.PlayerGui
+    screenGui.ResetOnSpawn = false
+
+    local viewport = workspace.CurrentCamera.ViewportSize
+    local isSmall = viewport.X < 500
+
+    -- ขนาดเฟรมหลัก: 90% กว้าง 80% สูง แต่ไม่เกิน 600x450
+    local frameWidth = math.min(600, viewport.X * 0.9)
+    local frameHeight = math.min(450, viewport.Y * 0.8)
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Parent = screenGui
+    mainFrame.Size = UDim2.new(0, frameWidth, 0, frameHeight)
+    mainFrame.Position = UDim2.new(0.5, -frameWidth/2, 0.5, -frameHeight/2)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = mainFrame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1
+    stroke.Color = Color3.fromRGB(100, 100, 100)
+    stroke.Parent = mainFrame
+
+    -- Title bar
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
+    titleBar.Parent = mainFrame
+    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    titleBar.BorderSizePixel = 0
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = titleBar
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Parent = titleBar
+    titleLabel.Size = UDim2.new(1, -40, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "📋 Summon Requirements"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextSize = isSmall and 18 or 16
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Parent = titleBar
+    closeButton.Size = UDim2.new(0, 30, 0, 30)
+    closeButton.Position = UDim2.new(1, -30, 0, 0)
+    closeButton.BackgroundTransparency = 1
+    closeButton.Text = "X"
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.TextSize = isSmall and 22 or 18
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+    end)
+
+    -- Content scrolling frame
+    local contentFrame = Instance.new("ScrollingFrame")
+    contentFrame.Name = "ContentFrame"
+    contentFrame.Parent = mainFrame
+    contentFrame.Size = UDim2.new(1, -20, 1, -50)
+    contentFrame.Position = UDim2.new(0, 10, 0, 40)
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ScrollBarThickness = 6
+    contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Parent = contentFrame
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, isSmall and 12 or 8)
+
+    local padding = Instance.new("UIPadding")
+    padding.Parent = contentFrame
+    padding.PaddingLeft = UDim.new(0, 5)
+    padding.PaddingRight = UDim.new(0, 5)
+
+    -- กำหนด font sizes
+    local headerFontSize = isSmall and 18 or 16
+    local normalFontSize = isSmall and 16 or 14
+    local bossButtonFontSize = isSmall and 18 or 16
+    local diffFontSize = isSmall and 16 or 14
+
+    -- Normal Bosses Header
+    local normalHeader = Instance.new("TextLabel")
+    normalHeader.Parent = contentFrame
+    normalHeader.Size = UDim2.new(1, 0, 0, 25)
+    normalHeader.BackgroundTransparency = 0.5
+    normalHeader.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    normalHeader.Text = "✦ Normal Bosses"
+    normalHeader.TextColor3 = Color3.fromRGB(200, 255, 200)
+    normalHeader.Font = Enum.Font.GothamBold
+    normalHeader.TextSize = headerFontSize
+    normalHeader.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Normal Bosses list
+    for _, boss in ipairs(summonBossList) do
+        if not boss.hasDifficulty then
+            local info = getSummonInfoText(boss.name, nil)
+            local line = Instance.new("TextLabel")
+            line.Parent = contentFrame
+            line.Size = UDim2.new(1, 0, 0, 20)
+            line.BackgroundTransparency = 1
+            line.Text = "  • " .. boss.display .. ": " .. info
+            line.TextColor3 = Color3.fromRGB(200, 255, 200)
+            line.TextXAlignment = Enum.TextXAlignment.Left
+            line.Font = Enum.Font.Gotham
+            line.TextSize = normalFontSize
+        end
+    end
+
+    local spacer = Instance.new("Frame")
+    spacer.Parent = contentFrame
+    spacer.Size = UDim2.new(1, 0, 0, 5)
+    spacer.BackgroundTransparency = 1
+
+    -- Difficulty Bosses Header
+    local diffHeader = Instance.new("TextLabel")
+    diffHeader.Parent = contentFrame
+    diffHeader.Size = UDim2.new(1, 0, 0, 25)
+    diffHeader.BackgroundTransparency = 0.5
+    diffHeader.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    diffHeader.Text = "✦ Difficulty Bosses"
+    diffHeader.TextColor3 = Color3.fromRGB(255, 200, 100)
+    diffHeader.Font = Enum.Font.GothamBold
+    diffHeader.TextSize = headerFontSize
+    diffHeader.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Difficulty Bosses with toggle
+    for _, boss in ipairs(summonBossList) do
+        if boss.hasDifficulty then
+            -- Boss button
+            local bossButton = Instance.new("TextButton")
+            bossButton.Parent = contentFrame
+            bossButton.Size = UDim2.new(1, 0, 0, 30)
+            bossButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            bossButton.Text = boss.display .. "  ▶"
+            bossButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            bossButton.TextXAlignment = Enum.TextXAlignment.Left
+            bossButton.Font = Enum.Font.GothamBold
+            bossButton.TextSize = bossButtonFontSize
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 4)
+            btnCorner.Parent = bossButton
+
+            -- Frame สำหรับรายละเอียด difficulty (เริ่มซ่อน)
+            local diffFrame = Instance.new("Frame")
+            diffFrame.Name = boss.name .. "DiffFrame"
+            diffFrame.Parent = contentFrame
+            diffFrame.BackgroundTransparency = 1
+            diffFrame.Size = UDim2.new(1, 0, 0, 0)
+            diffFrame.Visible = false
+            diffFrame.ClipsDescendants = true
+
+            local diffLayout = Instance.new("UIListLayout")
+            diffLayout.Parent = diffFrame
+            diffLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            diffLayout.Padding = UDim.new(0, 2)
+
+            diffLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                if diffFrame.Visible then
+                    diffFrame.Size = UDim2.new(1, 0, 0, diffLayout.AbsoluteContentSize.Y)
+                end
+            end)
+
+            -- เพิ่มแต่ละ difficulty
+            for _, diff in ipairs(difficultyList) do
+                local info = getSummonInfoText(boss.name, diff)
+                local diffLabel = Instance.new("TextLabel")
+                diffLabel.Parent = diffFrame
+                diffLabel.Size = UDim2.new(1, -20, 0, 20)
+                diffLabel.Position = UDim2.new(0, 20, 0, 0)
+                diffLabel.BackgroundTransparency = 1
+                diffLabel.Text = "  • " .. diff .. ": " .. info
+                diffLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+                diffLabel.TextXAlignment = Enum.TextXAlignment.Left
+                diffLabel.Font = Enum.Font.Gotham
+                diffLabel.TextSize = diffFontSize
+            end
+
+            local isOpen = false
+            bossButton.MouseButton1Click:Connect(function()
+                isOpen = not isOpen
+                diffFrame.Visible = isOpen
+                bossButton.Text = boss.display .. (isOpen and "  ▼" or "  ▶")
+                if isOpen then
+                    diffFrame.Size = UDim2.new(1, 0, 0, diffLayout.AbsoluteContentSize.Y)
+                end
+            end)
+        end
+    end
+end
+
+-- ฟังก์ชันสำหรับพยายามเข้าดันจ์
+local function attemptEnterDungeon()
+    if selectedDungeon == "" then
+        WindUI:Notify({
+            Title = "Warning",
+            Content = "กรุณาเลือก Dungeon ก่อน",
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    -- เรียก remote เปิด portal
+    local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RequestDungeonPortal")
+    local args = { selectedDungeon }
+    remote:FireServer(unpack(args))
+
+    task.wait(1)
+
+    -- หา ActiveDungeonPortal
+    local portal = workspace:FindFirstChild("ActiveDungeonPortal")
+    if not portal then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "ไม่พบ ActiveDungeonPortal",
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    if not hrp then
+        local char = player.Character
+        if char then hrp = char:FindFirstChild("HumanoidRootPart") end
+    end
+    if not hrp then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "ไม่พบตัวละคร",
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    -- TP ไปที่ portal (ยืนด้านหน้าเล็กน้อย)
+    local portalCF = portal:GetPivot()
+    hrp.CFrame = portalCF * CFrame.new(0, 0, -3)
+
+    task.wait(0.5)
+
+    -- จำลองกด E ค้าง 0.8 วินาที
+    VirtualInput:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(0.8)
+    VirtualInput:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+
+    WindUI:Notify({
+        Title = "Dungeon",
+        Content = "เข้าดันจ์ " .. selectedDungeon .. " แล้ว",
+        Duration = 2,
+        Icon = "check",
+    })
+    return true
+end
+
+-- ฟังก์ชันสำหรับเรียก remote เปิด portal (ไม่วาร์ป, ไม่กด E)
+local function requestOpenDungeonPortal()
+    if selectedDungeon == "" then
+        WindUI:Notify({
+            Title = "Warning",
+            Content = "Please select a dungeon first",
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RequestDungeonPortal")
+    local args = { selectedDungeon }
+    remote:FireServer(unpack(args))
+
+    WindUI:Notify({
+        Title = "Dungeon Portal",
+        Content = "Requested " .. selectedDungeon,
+        Duration = 2,
+        Icon = "info",
+    })
+    return true
+end
+
+-- Auto Dungeon Loop
+local function autoDungeonLoop()
+    while autoDungeonRunning do
+        local now = tick()
+        if now >= lastDungeonAttempt + dungeonCooldown then
+            requestOpenDungeonPortal()   -- เปลี่ยนจาก attemptEnterDungeon มาใช้อันนี้
+            lastDungeonAttempt = now
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Auto Leave Loop
+local function autoLeaveLoop()
+    while autoLeaveDungeonRunning do
+        local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LeaveDungeonPortal")
+        remote:FireServer()
+        WindUI:Notify({
+            Title = "Dungeon",
+            Content = "You have exited the dungeon.",
+            Duration = 2,
+            Icon = "check",
+        })
+        for i = 1, 10 do
+            if not autoLeaveDungeonRunning then break end
+            task.wait(1)
+        end
+    end
+end
+
+-- ฟังก์ชันสำหรับเข้า dungeon ที่มี portal อยู่แล้ว (ไม่เรียก remote)
+local function joinExistingDungeon()
+    -- หา portal
+    local portal = workspace:FindFirstChild("ActiveDungeonPortal")
+    if not portal then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "ActiveDungeonPortal was not found on the map.",
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    -- หา HumanoidRootPart ผู้เล่น
+    if not hrp then
+        local char = player.Character
+        if char then
+            hrp = char:FindFirstChild("HumanoidRootPart")
+        end
+    end
+    if not hrp then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "ไม่พบตัวละคร",
+            Duration = 2,
+            Icon = "alert",
+        })
+        return false
+    end
+
+    -- Teleport ไปที่ portal (ยืนด้านหน้าเล็กน้อย)
+    local portalCF = portal:GetPivot()
+    hrp.CFrame = portalCF * CFrame.new(0, 0, -3)
+
+    task.wait(0.5)  -- รอให้ ProximityPrompt ปรากฏ
+
+    -- กด E ค้าง 0.8 วินาที
+    VirtualInput:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+    task.wait(0.8)
+    VirtualInput:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+
+    WindUI:Notify({
+        Title = "Dungeon",
+        Content = "กำลังเข้าดันจ์...",
+        Duration = 2,
+        Icon = "check",
+    })
+    return true
+end
+
+-- Auto Vote Difficulty Loop
+local function autoVoteDifficultyLoop()
+    while autoVoteDifficultyRunning do
+        local now = tick()
+        if now >= lastVoteTime + voteCooldown then
+            local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DungeonWaveVote")
+            local args = { selectedDungeonDifficulty }
+            remote:FireServer(unpack(args))
+            WindUI:Notify({
+                Title = "Vote",
+                Content = "Voted " .. selectedDungeonDifficulty,
+                Duration = 1,
+                Icon = "info",
+            })
+            lastVoteTime = now
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Auto Kill Dungeon Mobs Loop
+local function autoKillDungeonMobsLoop()
+    while autoKillDungeonMobsRunning do
+        if not hrp then
+            local char = player.Character
+            if char then hrp = char:FindFirstChild("HumanoidRootPart") end
+        end
+        if not hrp then
+            RunService.Heartbeat:Wait()
+            continue
+        end
+
+        -- 🔁 เพิ่มส่วนนี้: ตรวจสอบและสวมใส่อาวุธที่เลือก
+        if selectedWeapon ~= "" then
+            local character = player.Character
+            if character then
+                local toolInHand = character:FindFirstChild(selectedWeapon)
+                if not toolInHand then
+                    local backpack = player:FindFirstChild("Backpack")
+                    if backpack then
+                        local tool = backpack:FindFirstChild(selectedWeapon)
+                        if tool and tool:IsA("Tool") then
+                            tool.Parent = character
+                        end
+                    end
+                end
+            end
+        end
+
+        -- หา mob จาก npcFolder (workspace.NPCs)
+        local target = nil
+        for _, mob in ipairs(npcFolder:GetChildren()) do
+            local humanoid = mob:FindFirstChild("Humanoid")
+            local root = mob:FindFirstChild("HumanoidRootPart")
+            if humanoid and humanoid.Health > 0 and root then
+                target = mob
+                break
+            end
+        end
+
+        if target then
+            -- โจมตี
+            local root = target:FindFirstChild("HumanoidRootPart")
+            if root then
+                local behindPos = root.Position + root.CFrame.LookVector * -attackDistance
+                hrp.CFrame = CFrame.lookAt(behindPos, root.Position)
+                hrp.Anchored = false
+
+                local now = tick()
+                if now >= lastAttackTime + attackCooldown then
+                    requestHit:FireServer()
+                    lastAttackTime = now
+                end
+
+                -- ใช้ skill auto ถ้าเปิด
+                for skillName, enabled in pairs(skillToggles) do
+                    if enabled then
+                        local lastTime = lastSkillPressTime[skillName] or 0
+                        if now >= lastTime + skillPressCooldown then
+                            local keyCode = getKeyCode(skillName)
+                            if keyCode then
+                                VirtualInput:SendKeyEvent(true, keyCode, false, game)
+                                task.wait(0.05)
+                                VirtualInput:SendKeyEvent(false, keyCode, false, game)
+                                lastSkillPressTime[skillName] = now
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            -- ไม่มี mob: วาร์ปไป respawn point
+            hrp.CFrame = CFrame.new(dungeonRespawnPoint) * CFrame.new(0, 3, 0)
+            hrp.Anchored = true
+            hrp.Velocity = Vector3.zero
+            hrp.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Auto Safe Player Loop
+local function autoSafePlayerLoop()
+    while autoSafePlayerRunning do
+        if not hrp then
+            local char = player.Character
+            if char then hrp = char:FindFirstChild("HumanoidRootPart") end
+        end
+        if hrp then
+            local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                local healthPercent = (humanoid.Health / humanoid.MaxHealth) * 100
+                if healthPercent < healthThreshold then
+                    -- วาร์ปไป safe spot
+                    hrp.CFrame = CFrame.new(safePlayerPosition) * CFrame.new(0, 3, 0)
+                    WindUI:Notify({
+                        Title = "Safe Player",
+                        Content = "Health low! Teleported to safe zone.",
+                        Duration = 2,
+                        Icon = "shield",
+                    })
+                    -- รอสักครู่ก่อนตรวจสอบอีกครั้ง
+                    task.wait(3)
+                end
+            end
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Auto Replay Loop
+local function autoReplayLoop()
+    while autoReplayRunning do
+        local now = tick()
+        if now >= lastReplayTime + replayCooldown then
+            local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("DungeonWaveReplayVote")
+            local args = { "sponsor" }
+            remote:FireServer(unpack(args))
+            WindUI:Notify({
+                Title = "Replay",
+                Content = "Replay vote sent",
+                Duration = 1,
+                Icon = "info",
+            })
+            lastReplayTime = now
+        end
+        RunService.Heartbeat:Wait()
+    end
+end
+
+-- Auto Slime Piece Loop
+local function autoSlimePieceLoop()
+    while autoSlimePieceRunning do
+        for _, loc in ipairs(slimePieceLocations) do
+            if not autoSlimePieceRunning then break end
+
+            if not hrp then
+                local char = player.Character
+                if char then hrp = char:FindFirstChild("HumanoidRootPart") end
+            end
+            if not hrp then
+                RunService.Heartbeat:Wait()
+                continue
+            end
+
+            -- วาร์ปไปที่ตำแหน่งกลางของเกาะ (หรือจุดที่กำหนด)
+            hrp.CFrame = CFrame.new(loc.pos) * CFrame.new(0, 5, 0)  -- ยกสูงขึ้นเล็กน้อย
+            task.wait(2)  -- รอให้โฟลเดอร์และโมเดลภายในโหลด
+
+            -- หา SlimePuzzlePiece ทั่ว workspace
+            local piece = nil
+            if loc.name == "Final Spot" then
+                -- สำหรับตำแหน่งสุดท้าย ให้หาชิ้นส่วนที่ใกล้ตำแหน่งนี้ที่สุด
+                local minDist = math.huge
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj.Name == "SlimePuzzlePiece" and obj:IsA("BasePart") then
+                        local dist = (obj.Position - loc.pos).Magnitude
+                        if dist < minDist then
+                            minDist = dist
+                            piece = obj
+                        end
+                    end
+                end
+            else
+                -- สำหรับเกาะทั่วไป หาชิ้นส่วนใน workspace (เพราะอาจอยู่ในโมเดลใดก็ได้ในโฟลเดอร์)
+                piece = workspace:FindFirstChild("SlimePuzzlePiece", true)
+            end
+
+            if piece and piece:IsA("BasePart") then
+                hrp.CFrame = piece.CFrame * CFrame.new(0, 2, 0)  -- ยืนบนชิ้นส่วน
+                task.wait(0.8)
+                VirtualInput:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                task.wait(0.8)
+                VirtualInput:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                -- อาจเพิ่ม task.wait(1) เพื่อให้เกมบันทึกการเก็บ
+            else
+                WindUI:Notify({
+                    Title = "Slime Piece",
+                    Content = "Not found at " .. (loc.name or "final spot"),
+                    Duration = 1,
+                    Icon = "alert",
+                })
+            end
+
+            task.wait(1)  -- หน่วงก่อนไปตำแหน่งถัดไป
+        end
+        -- วนซ้ำเรื่อย ๆ
+    end
+end
+
+-- Infinite Jump
+local function enableInfiniteJump()
+    if infiniteJumpConnection then return end
+    infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
+        if infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            local humanoid = player.Character.Humanoid
+            humanoid:ChangeState("Jumping")
+        end
+    end)
+end
+
+local function disableInfiniteJump()
+    if infiniteJumpConnection then
+        infiniteJumpConnection:Disconnect()
+        infiniteJumpConnection = nil
+    end
+end
+
+-- Fly
+local function enableFly()
+    if flyEnabled then return end
+    flyEnabled = true
+    if flyConnection then flyConnection:Disconnect() end
+    flyConnection = RunService.Heartbeat:Connect(function()
+        if not flyEnabled or not player.Character then return end
+        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if not hrp or not humanoid then return end
+
+        -- ทำให้ Humanoid ไม่ล้ม
+        humanoid.PlatformStand = true
+
+        local moveDirection = Vector3.zero
+        local cam = workspace.CurrentCamera
+
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDirection = moveDirection + cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDirection = moveDirection - cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDirection = moveDirection - cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDirection = moveDirection + cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveDirection = moveDirection + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            moveDirection = moveDirection + Vector3.new(0, -1, 0)
+        end
+
+        if moveDirection.Magnitude > 0 then
+            moveDirection = moveDirection.Unit * flySpeed
+        end
+
+        hrp.Velocity = moveDirection
+    end)
+end
+
+local function disableFly()
+    flyEnabled = false
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    if player.Character then
+        local humanoid = player.Character:FindFirstChild("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+    end
+end
+
+-- === UI ===
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local Window = WindUI:CreateWindow({
+    Title = "Sailor Piece",
+    Icon = "rbxassetid://118253533466049",
+    Author = "By Shadow X Hub",
+})
+Window:EditOpenButton({
+    Title = "Open Example UI",
+    Icon = "smartphone",
+    CornerRadius = UDim.new(0,16),
+    StrokeThickness = 2,
+    Color = ColorSequence.new(
+        Color3.fromHex("FF0F7B"), 
+        Color3.fromHex("F89B29")
+    ),
+    OnlyMobile = false,
+    Enabled = true,
+    Draggable = true,
+})
+Window:Tag({
+    Title = "v1",
+    Icon = "github",
+    Color = Color3.fromHex("#30ff6a"),
+    Radius = 10,
+})
+WindUI:Notify({
+    Title = "Script by Shadow X Hub",
+    Content = "Support we plese",
+    Duration = 3,
+    Icon = "heart-plus",
+})
+
+local TabCredit = Window:Tab({
+    Title = "Main",
+    Icon = "house",
+    Locked = false,
+})
+TabCredit:Select()
+local Paragraph = TabCredit:Paragraph({
+    Title = "Credit",
+    Icon = "credit-card",
+    Desc = "Created by ส.จ.บังเหรียญ🏅 And Deepseek(AI)",
+    Color = "Blue",
+    Image = "",
+    ImageSize = 30,
+    Thumbnail = "",
+    ThumbnailSize = 80,
+    Locked = false,
+    Buttons = {
+        {
+            Icon = "link",
+            Title = "Discord",
+            Callback = function()
+                setclipboard("https://discord.gg/FKSegFxhTZ")
+                WindUI:Notify({
+                    Title = "Notification",
+                    Content = "Copied!",
+                    Duration = 3,
+                    Icon = "copy",
+                })
+            end,
+        }
+    }
+})
+
+local MainSection = Window:Section({
+    Title = "Auto Farm",
+    Icon = "laptop-minimal-check",
+    Opened = false,
+})
+
+local SettingsTab = MainSection:Tab({
+    Title = "Setting Auto Farm",
+    Icon = "wrench",
+    Locked = false,
+})
+
+local WeaponSection = SettingsTab:Section({ 
+    Title = "Set weapon",
+})
+weaponDropdown = SettingsTab:Dropdown({
+    Title = "Weapon",
+    Desc = "Set Weapon",
+    Values = {},
+    Value = "",
+    Callback = function(option) 
+        selectedWeapon = option
+    end
+})
+
+local OpenHakiSection = SettingsTab:Section({ 
+    Title = "Auto Open Haki",
+})
+
+SettingsTab:Toggle({
+    Title = "Auto Use Buso Haki",
+    Desc = "Auto Use Buso Haki",
+    Icon = "anvil",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        if not busoInitialized then
+            busoInitialized = true
+            autoBusoHaki = state
+            return
+        end
+        autoBusoHaki = state
+        local args = { "Toggle" }
+        local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("HakiRemote")
+        if remote then
+            remote:FireServer(unpack(args))
+            WindUI:Notify({
+                Title = "Buso Haki",
+                Content = state and "เปิดใช้งาน" or "ปิดใช้งาน",
+                Duration = 1,
+                Icon = "info",
+            })
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ไม่พบ Remote HakiRemote",
+                Duration = 2,
+                Icon = "alert",
+            })
+        end
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "Auto Use Observation Haki",
+    Desc = "Auto Use Observation Haki",
+    Icon = "eye",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        if not observationInitialized then
+            observationInitialized = true
+            autoObservationHaki = state
+            return
+        end
+        autoObservationHaki = state
+        local args = { "Toggle" }
+        local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ObservationHakiRemote")
+        if remote then
+            remote:FireServer(unpack(args))
+            WindUI:Notify({
+                Title = "Observation Haki",
+                Content = state and "เปิดใช้งาน" or "ปิดใช้งาน",
+                Duration = 1,
+                Icon = "info",
+            })
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ไม่พบ Remote ObservationHakiRemote",
+                Duration = 2,
+                Icon = "alert",
+            })
+        end
+    end
+})
+
+local SkillSection = SettingsTab:Section({ 
+    Title = "Auto skill",
+})
+
+SettingsTab:Toggle({
+    Title = "Auto Z",
+    Desc = "Auto press Z key",
+    Icon = "keyboard",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        skillToggles.Z = state
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "Auto X",
+    Desc = "Auto press X key",
+    Icon = "keyboard",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        skillToggles.X = state
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "Auto C",
+    Desc = "Auto press C key",
+    Icon = "keyboard",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        skillToggles.C = state
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "Auto V",
+    Desc = "Auto press V key",
+    Icon = "keyboard",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        skillToggles.V = state
+    end
+})
+
+SettingsTab:Toggle({
+    Title = "Auto B",
+    Desc = "Auto press B key",
+    Icon = "keyboard",
+    Value = false,
+    Type = "Checkbox",
+    Callback = function(state)
+        skillToggles.B = state
+    end
+})
+
+SettingsTab:Slider({
+    Title = "Skill Cooldown",
+    Desc = "Seconds between each skill press",
+    Step = 0.1,
+    Value = {
+        Min = 0.1,
+        Max = 2,
+        Default = 0.5,
+    },
+    Callback = function(value)
+        skillPressCooldown = value
+    end
+})
+
+local DistSection = SettingsTab:Section({ 
+    Title = "Setting Distance",
+})
+SettingsTab:Slider({
+    Title = "Distance",
+    Desc = "Adjust distance behind monster",
+    Step = 0.5,
+    Value = {
+        Min = 5,
+        Max = 20,
+        Default = 8,
+    },
+    Callback = function(value)
+        attackDistance = value
+    end
+})
+
+local SafeSection = SettingsTab:Section({ 
+    Title = "Safe player",
+})
+SettingsTab:Slider({
+    Title = "Safe player",
+    Desc = "High in the sky when there are no monsters.",
+    Step = 10,
+    Value = {
+        Min = 50,
+        Max = 500,
+        Default = 200,
+    },
+    Callback = function(value)
+        floatHeight = value
+    end
+})
+SettingsTab:Divider()
+
+-- ===== Farm Tab =====
+local FarmTab = MainSection:Tab({
+    Title = "Auto Farm",
+    Icon = "play",
+    Locked = false,
+})
+
+-- Auto Farm Level
+local FarmSection = FarmTab:Section({ 
+    Title = "Auto Farm Level",
+    Icon = "pickaxe",
+})
+FarmTab:Toggle({
+    Title = "Auto Farm",
+    Desc = "Auto Farm Level 1 - 10000",
+    Icon = "pickaxe",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if not autoFarmRunning then
+                if not hrp then
+                    local char = player.Character or player.CharacterAdded:Wait()
+                    local timeout = 5
+                    local start = tick()
+                    repeat
+                        hrp = char:FindFirstChild("HumanoidRootPart")
+                        if hrp then break end
+                        task.wait(0.1)
+                    until tick() - start > timeout
+                    if not hrp then
+                        warn("ไม่พบ HumanoidRootPart ภายในเวลา", timeout, "วินาที")
+                        WindUI:Notify({
+                            Title = "Error",
+                            Content = "ไม่พบ HumanoidRootPart",
+                            Duration = 3,
+                            Icon = "alert",
+                        })
+                        return
+                    end
+                end
+                autoFarmRunning = true
+                enableNoclip()
+                if selectedWeapon ~= "" then
+                    equipWeapon(selectedWeapon)
+                end
+                spawn(autoFarmLoop)
+            end
+        else
+            if autoFarmRunning then
+                autoFarmRunning = false
+            end
+        end
+    end
+})
+FarmTab:Divider()
+FarmTab:Toggle({
+    Title = "Fast Auto Farm(Test)",
+    Desc = "Auto Farm Fast Level",
+    Icon = "fast-forward",
+    Type = "Checkbox",
+    Value = false,
+    Locked = true,
+    Callback = function(state) 
+        -- no operation
+    end
+})
+
+-- Auto Farm Mob
+local MobSection = FarmTab:Section({ 
+    Title = "Auto Farm Mob",
+    Icon = "users",
+})
+local mobDropdown = FarmTab:Dropdown({
+    Title = "Select Mob (Multi)",
+    Desc = "Select mob groups to farm (priority order)",
+    Values = mobGroupNames,
+    Value = {},
+    Multi = true,
+    AllowNone = true,
+    Callback = function(option)
+        selectedMobGroups = {}
+        for _, name in ipairs(option) do
+            for _, group in ipairs(mobGroupList) do
+                if group.name == name then
+                    table.insert(selectedMobGroups, group)
+                    break
+                end
+            end
+        end
+    end
+})
+
+FarmTab:Toggle({
+    Title = "Auto Farm Mob",
+    Desc = "Auto Farm selected mob groups",
+    Icon = "users-round",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if autoFarmRunning then
+                autoFarmRunning = false
+                task.wait(0.5)
+            end
+            if not autoMobRunning then
+                if #selectedMobGroups == 0 then
+                    WindUI:Notify({
+                        Title = "Warning",
+                        Content = "Please select at least one mob group",
+                        Duration = 2,
+                        Icon = "alert",
+                    })
+                    return
+                end
+                autoMobRunning = true
+                updatePriorityLoop()
+            end
+        else
+            autoMobRunning = false
+            updatePriorityLoop()
+        end
+    end
+})
+
+-- Auto Farm Bosses
+local BossesSection = FarmTab:Section({ 
+    Title = "Auto Farm Bosses",
+    Icon = "user-round",
+})
+local bossDropdown = FarmTab:Dropdown({
+    Title = "Select Bosses (Multi)",
+    Desc = "Select bosses to farm (priority order)",
+    Values = bossNames,
+    Value = {},
+    Multi = true,
+    AllowNone = true,
+    Callback = function(option)
+        selectedBosses = {}
+        for _, displayName in ipairs(option) do
+            for _, boss in ipairs(bossList) do
+                if boss.display == displayName then
+                    table.insert(selectedBosses, boss)
+                    break
+                end
+            end
+        end
+    end
+})
+
+FarmTab:Toggle({
+    Title = "Auto Farm Bosses",
+    Desc = "Auto Farm selected bosses",
+    Icon = "user-round",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if autoFarmRunning then
+                autoFarmRunning = false
+                task.wait(0.5)
+            end
+            if not autoBossRunning then
+                if #selectedBosses == 0 then
+                    WindUI:Notify({
+                        Title = "Warning",
+                        Content = "Please select at least one boss",
+                        Duration = 2,
+                        Icon = "alert",
+                    })
+                    return
+                end
+                autoBossRunning = true
+                updatePriorityLoop()
+            end
+        else
+            autoBossRunning = false
+            updatePriorityLoop()
+        end
+    end
+})
+
+-- Boss Summon
+local SummonSection = FarmTab:Section({ 
+    Title = "Boss Summon",
+    Icon = "folder-down",
+})
+FarmTab:Button({
+    Title = "Check requirement summon boss",
+    Desc = "Check requirement summon boss",
+    Locked = false,
+    Callback = showSummonInfoFrame   -- เรียกฟังก์ชันที่เตรียมไว้
+})
+
+-- Dropdown เลือกบอส
+local bossSummonDropdown = FarmTab:Dropdown({
+    Title = "Select Summon Boss",
+    Desc = "Select a boss to summon",
+    Values = { "Saber", "Qin Shi", "Ichigo", "Gilgamesh", "Strongest Of Today", "Strongest In History", "Rimuru" },
+    Value = "Saber",
+    Callback = function(option)
+        if option == "Saber" then selectedSummonBoss = "SaberBoss"
+        elseif option == "Qin Shi" then selectedSummonBoss = "QinShiBoss"
+        elseif option == "Ichigo" then selectedSummonBoss = "IchigoBoss"
+        elseif option == "Gilgamesh" then selectedSummonBoss = "GilgameshBoss"
+        elseif option == "Strongest Of Today" then selectedSummonBoss = "StrongestofTodayBoss"
+        elseif option == "Strongest In History" then selectedSummonBoss = "StrongestinHistoryBoss"
+        elseif option == "Rimuru" then selectedSummonBoss = "RimuruBoss"
+        end
+        -- ไม่มีการเรียก updateSummonInfo
+    end
+})
+
+-- Dropdown เลือก difficulty
+local difficultyDropdown = FarmTab:Dropdown({
+    Title = "Select Difficulty (Gilgamesh, Shinjuku, Rimuru)",
+    Desc = "Choose difficulty for bosses that support it",
+    Values = difficultyList,
+    Value = "Normal",
+    Callback = function(option)
+        selectedDifficulty = option
+        -- ไม่มีการเรียก updateSummonInfo
+    end
+})
+
+FarmTab:Toggle({
+    Title = "Auto Summon Boss",
+    Desc = "Automatically summon selected boss when not present",
+    Icon = "folder-symlink",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if not autoSummonRunning then
+                autoSummonRunning = true
+                spawn(autoSummonLoop)
+            end
+        else
+            autoSummonRunning = false
+        end
+    end
+})
+FarmTab:Button({
+    Title = "Craft Divine Grail",
+    Desc = "Need 3 Broken Sword",
+    Locked = false,
+    Callback = function()
+        local args = { "DivineGrail", 1 }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestGrailCraft"):InvokeServer(unpack(args))
+    end
+})
+FarmTab:Button({
+    Title = "Craft Slime Key",
+    Desc = "Need 2 Slime Shard",
+    Locked = false,
+    Callback = function()
+        local args = { "SlimeKey", 1 }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestSlimeCraft"):InvokeServer(unpack(args))
+    end
+})
+
+-- ===== Auto Haki Tab =====
+local HakiTab = MainSection:Tab({
+    Title = "Auto Haki",
+    Icon = "container",
+    Locked = false,
+})
+local BusoHakiSection = HakiTab:Section({ 
+    Title = "Auto Haki Buso",
+    Icon = "anvil",
+})
+
+HakiTab:Button({
+    Title = "Accept the quest Buso Haki",
+    Desc = "Accept the quest Buso Haki",
+    Locked = false,
+    Callback = function()
+        local argsAccept = { "HakiQuestNPC" }
+        local acceptRemote = ReplicatedStorage:FindFirstChild("RemoteEvents"):FindFirstChild("QuestAccept")
+        if acceptRemote then
+            acceptRemote:FireServer(unpack(argsAccept))
+            WindUI:Notify({
+                Title = "Quest Accepted",
+                Content = "รับเควส Buso Haki แล้ว",
+                Duration = 2,
+                Icon = "check",
+            })
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ไม่พบ Remote สำหรับรับเควส",
+                Duration = 2,
+                Icon = "alert",
+            })
+        end
+    end
+})
+
+HakiTab:Toggle({
+    Title = "Auto Buso Quest 1(Required Combat)",
+    Desc = "Kill mob 150 times",
+    Icon = "hand-fist",
+    Type = "Checkbox",
+    Value = false,
+    Locked = false,
+    Callback = function(state)
+        if state then
+            if not quest1Running then
+                quest1Running = true
+                WindUI:Notify({
+                    Title = "Quest 1",
+                    Content = "เริ่มทำเควส 1 (Kill 150)",
+                    Duration = 2,
+                    Icon = "info",
+                })
+                spawn(quest1Loop)
+            end
+        else
+            quest1Running = false
+        end
+    end
+})
+
+HakiTab:Toggle({
+    Title = "Auto Buso Quest 2(Required Combat)",
+    Desc = "Use Z ability 75 times",
+    Icon = "sparkles",
+    Type = "Checkbox",
+    Value = false,
+    Locked = false,
+    Callback = function(state)
+        if state then
+            if not quest2Running then
+                quest2Running = true
+                WindUI:Notify({
+                    Title = "Quest 2",
+                    Content = "เริ่มทำเควส 2 (Use Z 75)",
+                    Duration = 2,
+                    Icon = "info",
+                })
+                spawn(quest2Loop)
+            end
+        else
+            quest2Running = false
+        end
+    end
+})
+
+HakiTab:Toggle({
+    Title = "Auto Buso Quest 3(Required Combat)",
+    Desc = "Punch 750 times",
+    Icon = "fist",
+    Type = "Checkbox",
+    Value = false,
+    Locked = false,
+    Callback = function(state)
+        if state then
+            if not quest3Running then
+                quest3Running = true
+                WindUI:Notify({
+                    Title = "Quest 3",
+                    Content = "เริ่มทำเควส 3 (Punch 750)",
+                    Duration = 2,
+                    Icon = "info",
+                })
+                spawn(quest3Loop)
+            end
+        else
+            quest3Running = false
+        end
+    end
+})
+
+local ObservationSection = HakiTab:Section({ 
+    Title = "Observation Haki",
+    Icon = "eye",
+})
+
+HakiTab:Button({
+    Title = "Buy Observation Haki",
+    Desc = "TP to Npc for Buy Observation Haki",
+    Locked = false,
+    Callback = function()
+        if not hrp then
+            local char = player.Character
+            if char then
+                hrp = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not hrp then
+                WindUI:Notify({
+                    Title = "Error",
+                    Content = "ไม่พบตัวละคร",
+                    Duration = 3,
+                    Icon = "alert",
+                })
+                return
+            end
+        end
+
+        local money = player.Data.Money.Value
+        local gems = player.Data.Gems.Value
+        local requiredMoney = 250000
+        local requiredGems = 300
+
+        if money >= requiredMoney and gems >= requiredGems then
+            local npc = workspace.ServiceNPCs and workspace.ServiceNPCs:FindFirstChild("ObservationBuyer")
+            if npc then
+                local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc
+                if npcRoot then
+                    hrp.CFrame = npcRoot.CFrame * CFrame.new(0, 0, 3)
+                    task.wait(0.5)
+
+                    local prompt = npc:FindFirstChildOfClass("ProximityPrompt") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt then
+                        prompt:InputHoldBegin()
+                        task.wait(0.1)
+                        prompt:InputHoldEnd()
+                        WindUI:Notify({
+                            Title = "Observation Haki",
+                            Content = "Purchase completed!",
+                            Duration = 2,
+                            Icon = "check",
+                        })
+                    else
+                        WindUI:Notify({
+                            Title = "ไม่พบ ProximityPrompt",
+                            Content = "อาจต้องซื้อด้วยวิธีอื่น",
+                            Duration = 3,
+                            Icon = "alert",
+                        })
+                    end
+                else
+                    WindUI:Notify({
+                        Title = "ไม่พบตำแหน่ง NPC",
+                        Content = "ไม่พบ HumanoidRootPart ของ NPC",
+                        Duration = 3,
+                        Icon = "alert",
+                    })
+                end
+            else
+                WindUI:Notify({
+                    Title = "ไม่พบ NPC",
+                    Content = "ไม่พบ ObservationBuyer ใน workspace.ServiceNPCs",
+                    Duration = 3,
+                    Icon = "alert",
+                })
+            end
+        else
+            local needMoney = requiredMoney - money
+            local needGems = requiredGems - gems
+            WindUI:Notify({
+                Title = "เงินหรือเพชรไม่พอ",
+                Content = string.format("ขาดเงิน %d และเพชร %d", needMoney, needGems),
+                Duration = 5,
+                Icon = "alert-triangle",
+            })
+        end
+    end
+})
+
+-- ===== Auto Chest Tab =====
+local ChestTab = MainSection:Tab({
+    Title = "Auto Chest",
+    Icon = "package",
+    Locked = false,
+})
+local ChestSection = ChestTab:Section({ 
+    Title = "Auto Open Chest",
+    Icon = "package-open",
+})
+
+ChestTab:Dropdown({
+    Title = "Select Chest (Multi)",
+    Desc = "Select your chest to open",
+    Values = chestList,
+    Value = {},
+    Multi = true,
+    AllowNone = true,
+    Callback = function(option)
+        selectedChests = option
+    end
+})
+
+ChestTab:Input({
+    Title = "Amount",
+    Desc = "Number of chests to open per click/cycle",
+    Value = "1",
+    InputIcon = "archive-restore",
+    Type = "Input",
+    Placeholder = "Enter amount",
+    Callback = function(input)
+        openChestAmount = tonumber(input) or 1
+        if openChestAmount < 1 then openChestAmount = 1 end
+    end
+})
+
+local chestToggle = ChestTab:Toggle({
+    Title = "Auto Open Chest",
+    Desc = "Automatically open chests of selected categories",
+    Icon = "package-open",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if #selectedChests == 0 then
+                WindUI:Notify({
+                    Title = "Warning",
+                    Content = "Please select at least one chest type",
+                    Duration = 2,
+                    Icon = "alert",
+                })
+                chestToggle:SetValue(false)
+                return
+            end
+            if not autoOpenChestRunning then
+                autoOpenChestRunning = true
+                spawn(autoOpenChestLoop)
+            end
+        else
+            autoOpenChestRunning = false
+        end
+    end
+})
+
+ChestTab:Button({
+    Title = "Open Chest Now",
+    Desc = "Click to open the selected chests with the specified amount",
+    Locked = false,
+    Callback = function()
+        if #selectedChests == 0 then
+            WindUI:Notify({
+                Title = "Warning",
+                Content = "Please select at least one chest type",
+                Duration = 2,
+                Icon = "alert",
+            })
+            return
+        end
+        local remote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("UseItem")
+        if remote then
+            for _, chestName in ipairs(selectedChests) do
+                local args = { "Use", chestName, openChestAmount }
+                remote:FireServer(unpack(args))
+                task.wait(0.1)
+            end
+            WindUI:Notify({
+                Title = "Chest",
+                Content = "Opened " .. openChestAmount .. " of " .. table.concat(selectedChests, ", "),
+                Duration = 2,
+                Icon = "check",
+            })
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "UseItem remote not found",
+                Duration = 2,
+                Icon = "alert",
+            })
+        end
+    end
+})
+
+-- ===== Raid Mode =====
+local RaidSection = Window:Section({
+    Title = "Raid Mode",
+    Icon = "sunset",
+    Opened = false,
+})
+
+-- ------------------------------------------------------------------
+-- DUNGEON TAB
+-- ------------------------------------------------------------------
+local DugeonTab = RaidSection:Tab({
+    Title = "Dungeon",
+    Icon = "door-open",
+    Locked = false,
+})
+local DugeonSection = DugeonTab:Section({ 
+    Title = "Auto Dungeon",
+    Icon = "door-open",
+})
+
+-- ฟังก์ชัน TP ไปหา NPC Dungeon (ใช้ teleportToNPC ที่ประกาศไว้)
+DugeonTab:Button({
+    Title = "TP to Npc Dungeon",
+    Desc = "Teleport to Dungeon Portals NPC",
+    Callback = function()
+        teleportToNPC("DungeonPortalsNPC")
+    end
+})
+
+DugeonTab:Divider()
+
+-- ตัวแปรเก็บ reference ของ Toggle เพื่อใช้ SetValue เมื่อเกิดข้อผิดพลาด
+local autoDungeonToggle
+local autoLeaveToggle
+
+-- Dropdown เลือกประเภทดันจ์
+DugeonTab:Dropdown({
+    Title = "Select Dungeon",
+    Desc = "Select the dungeon you want to auto-dungeon",
+    Values = { "Cid Dungeon", "Rune Dungeon", "Double Dungeon" },
+    Value = "",
+    Callback = function(option)
+        if option == "Cid Dungeon" then
+            selectedDungeon = "CidDungeon"
+        elseif option == "Rune Dungeon" then
+            selectedDungeon = "RuneDungeon"
+        elseif option == "Double Dungeon" then
+            selectedDungeon = "DoubleDungeon"
+        else
+            selectedDungeon = ""
+        end
+    end
+})
+
+-- Toggle Auto Dungeon
+autoDungeonToggle = DugeonTab:Toggle({
+    Title = "Auto Dungeon",
+    Desc = "Automatically request dungeon portal every 10 seconds",
+    Icon = "door-open",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if selectedDungeon == "" then
+                WindUI:Notify({
+                    Title = "Warning",
+                    Content = "Please select a dungeon first",
+                    Duration = 2,
+                    Icon = "alert",
+                })
+                autoDungeonToggle:SetValue(false)
+                return
+            end
+            if not autoDungeonRunning then
+                autoDungeonRunning = true
+                spawn(autoDungeonLoop)
+                WindUI:Notify({
+                    Title = "Auto Dungeon",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            autoDungeonRunning = false
+        end
+    end
+})
+
+-- Toggle Auto Leave Dungeon
+autoLeaveToggle = DugeonTab:Toggle({
+    Title = "Auto Leave Dungeon",
+    Desc = "Automatically leave the dungeon every 10 seconds",
+    Icon = "octagon-minus",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if not autoLeaveDungeonRunning then
+                autoLeaveDungeonRunning = true
+                spawn(autoLeaveLoop)
+                WindUI:Notify({
+                    Title = "Auto Leave",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            autoLeaveDungeonRunning = false
+        end
+    end
+})
+
+-- ปุ่ม Join Dungeon
+DugeonTab:Button({
+    Title = "Join Dungeon",
+    Desc = "Teleport to ActiveDungeonPortal and press E",
+    Callback = function()
+        joinExistingDungeon()
+    end
+})
+
+local InDugeonSection = DugeonTab:Section({ 
+    Title = "In Dungeon",
+    Icon = "door-closed",
+})
+
+-- Dropdown เลือกความยาก
+DugeonTab:Dropdown({
+    Title = "Select Difficulty",
+    Desc = "Select the difficulty of the dungeon",
+    Values = { "Easy", "Medium", "Hard", "Extreme" },
+    Value = "Easy",
+    Callback = function(option)
+        selectedDungeonDifficulty = option
+    end
+})
+
+-- Toggle Auto Vote Difficulty
+local autoVoteToggle = DugeonTab:Toggle({
+    Title = "Auto Vote Difficulty",
+    Desc = "Automatically vote for the selected difficulty",
+    Icon = "vote",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if not autoVoteDifficultyRunning then
+                autoVoteDifficultyRunning = true
+                spawn(autoVoteDifficultyLoop)
+                WindUI:Notify({
+                    Title = "Auto Vote",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            autoVoteDifficultyRunning = false
+        end
+    end
+})
+
+-- Toggle Auto Kill Monsters
+local autoKillToggle = DugeonTab:Toggle({
+    Title = "Auto kill monsters",
+    Desc = "Automatically kill monsters in the dungeon",
+    Icon = "swords",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            -- เปิด
+            if not autoKillDungeonMobsRunning then
+                autoKillDungeonMobsRunning = true
+                spawn(autoKillDungeonMobsLoop)
+                WindUI:Notify({
+                    Title = "Auto Kill",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            -- ปิด: หยุด loop และทำให้ตัวละครลงพื้น
+            autoKillDungeonMobsRunning = false
+            
+            -- ถ้ามีตัวละคร ให้ปลดลอยและดันลง
+            if hrp then
+                hrp.Anchored = false
+                hrp.Velocity = Vector3.new(0, -50, 0)  -- แรงดึงลงเพื่อให้ตกเร็วขึ้น
+            end
+        end
+    end
+})
+
+-- Slider ตั้งค่า % เลือด
+DugeonTab:Slider({
+    Title = "Health safety for players.",
+    Desc = "Automatically Safe Place: Take the player to a safe place if their health is below this percentage.",
+    Step = 1,
+    Value = {
+        Min = 20,
+        Max = 100,
+        Default = 50,
+    },
+    Callback = function(value)
+        healthThreshold = value
+    end
+})
+
+-- Toggle Auto Safe Players
+local autoSafeToggle = DugeonTab:Toggle({
+    Title = "Auto Safe Players",
+    Desc = "Automatically take players to a safe place if their health is below the threshold",
+    Icon = "shield-check",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if not autoSafePlayerRunning then
+                autoSafePlayerRunning = true
+                spawn(autoSafePlayerLoop)
+                WindUI:Notify({
+                    Title = "Auto Safe",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            autoSafePlayerRunning = false
+        end
+    end
+})
+-- Toggle Auto Replay
+local autoReplayToggle = DugeonTab:Toggle({
+    Title = "Auto Replay",
+    Desc = "Automatically replay the dungeon if it fails",
+    Icon = "repeat",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if not autoReplayRunning then
+                autoReplayRunning = true
+                spawn(autoReplayLoop)
+                WindUI:Notify({
+                    Title = "Auto Replay",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            autoReplayRunning = false
+        end
+    end
+})
+
+-- ------------------------------------------------------------------
+-- BOSS RUSH TAB
+-- ------------------------------------------------------------------
+local BossRushTab = RaidSection:Tab({
+    Title = "Boss Rush",
+    Icon = "biceps-flexed",
+    Locked = true,
+})
+local BossRushSection = BossRushTab:Section({ 
+    Title = "Auto Boss Rush",
+    Icon = "biceps-flexed",
+})
+
+BossRushTab:Button({
+    Title = "TP to Npc Boss Rush",
+    Desc = "Teleport to Boss Rush NPC",
+    Callback = function()
+        -- เปลี่ยนชื่อ NPC ตามจริง
+        teleportToNPC("BossRushPortalNPC")
+    end
+})
+
+BossRushTab:Divider()
+
+BossRushTab:Dropdown({
+    Title = "Select Boss Rush",
+    Desc = "Select the boss rush you want to auto",
+    Values = { "Boss Rush" },
+    Value = "",
+    Callback = function(option)
+        print("Boss Rush selected:", option)
+        -- ถ้ามี remote หรือฟังก์ชันสำหรับ Boss Rush ให้เรียกที่นี่
+    end
+})
+
+-- ===== Quest mission =====
+local QuestSection = Window:Section({
+    Title = "Quest mission",
+    Icon = "clipboard-plus",
+    Opened = false,
+})
+local QuestTab = QuestSection:Tab({
+    Title = "Quest",
+    Icon = "clipboard-type",
+    Locked = false,
+})
+local RimuruSection = QuestTab:Section({ 
+    Title = "Quest Rimuru",
+    Icon = "clipboard-type",
+})
+QuestTab:Button({
+    Title = "TP to Npc Rimuru Quest",
+    Desc = "Teleport to Rimuru Quest NPC",
+    Locked = false,
+    Callback = function()
+        teleportToNPC("SlimeCraftNPC")
+    end
+})
+QuestTab:Toggle({
+    Title = "Auto Slime Piece",
+    Desc = "Automatically collect 7 Slime Puzzle Pieces across islands",
+    Icon = "bird",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state) 
+        if state then
+            if not autoSlimePieceRunning then
+                autoSlimePieceRunning = true
+                spawn(autoSlimePieceLoop)
+                WindUI:Notify({
+                    Title = "Auto Slime Piece",
+                    Content = "Enabled",
+                    Duration = 2,
+                    Icon = "info",
+                })
+            end
+        else
+            autoSlimePieceRunning = false
+        end
+    end
+})
+local DungeonQSection = QuestTab:Section({ 
+    Title = "Quest Npc Dungeon Quest",
+    Icon = "clipboard-type",
+})
+QuestTab:Button({
+    Title = "TP to Npc Dungeon Quest",
+    Desc = "Teleport to Dungeon Quest NPC",
+    Locked = false,
+    Callback = function()
+        teleportToNPC("DungeonPortalsNPC")
+    end
+})
+QuestTab:Toggle({
+    Title = "Auto Dungeon Quest(Coming Soon)",
+    Desc = "Automatically complete the Dungeon Quest",
+    Icon = "bird",
+    Type = "Checkbox",
+    Locked = true,
+    Value = false, -- default value
+    Callback = function(state) 
+        
+    end
+})
+
+-- ===== TP =====
+local TPSection = Window:Section({
+    Title = "TP",
+    Icon = "user-round-search",
+    Opened = false,
+})
+local TPislandTab = TPSection:Tab({
+    Title = "Island",
+    Icon = "tree-palm",
+    Locked = false,
+})
+local IslandSection = TPislandTab:Section({ 
+    Title = "Island",
+    Icon = "tree-palm",
+})
+TPislandTab:Button({
+    Title = "TP to Starter Island",
+    Desc = "Teleport to Starter Island(0 - 249)",
+    Locked = false,
+    Callback = function()
+        local args = { "Starter" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Jungle Island",
+    Desc = "Teleport to Jungle Island(250 - 749)",
+    Locked = false,
+    Callback = function()
+        local args = { "Jungle" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Desert Island",
+    Desc = "Teleport to Desert Island(750 - 1499)",
+    Locked = false,
+    Callback = function()
+        local args = { "Desert" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Snow Island",
+    Desc = "Teleport to Snow Island(1500 - 2999)",
+    Locked = false,
+    Callback = function()
+        local args = { "Snow" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Sailor Island",
+    Desc = "Teleport to Sailor Island(Main)",
+    Locked = false,
+    Callback = function()
+        local args = { "Sailor" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Shibuya Station",
+    Desc = "Teleport to Shibuya Station(3000 - 5000)",
+    Locked = false,
+    Callback = function()
+        local args = { "Shibuya" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Hueco Mundo",
+    Desc = "Teleport to Hueco Mundo(5000 - 6250)",
+    Locked = false,
+    Callback = function()
+        local args = { "HuecoMundo" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Boss Island",
+    Desc = "Teleport to Boss Island(Summon Boss)",
+    Locked = false,
+    Callback = function()
+        local args = { "Boss" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Dungeon Island",
+    Desc = "Teleport to Dungeon Island(Dungeon)",
+    Locked = false,
+    Callback = function()
+        local args = { "Dungeon" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Shinjuku Island",
+    Desc = "Teleport to Shinjuku Island(6250 - 8000)",
+    Locked = false,
+    Callback = function()
+        local args = { "Shinjuku" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+-- TPislandTab:Button({
+--     Title = "TP to Valentine Island",
+--     Desc = "Teleport to Valentine Island(Cupid)",
+--     Locked = false,
+--     Callback = function()
+--         local args = { "Valentine" }
+--         game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+--     end
+-- })
+TPislandTab:Button({
+    Title = "TP to Slime Island",
+    Desc = "Teleport to Slime Island(8000 - 9000)",
+    Locked = false,
+    Callback = function()
+        local args = { "Slime" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+TPislandTab:Button({
+    Title = "TP to Academy Island",
+    Desc = "Teleport to Academy Island(9000+)",
+    Locked = false,
+    Callback = function()
+        local args = { "Academy" }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
+    end
+})
+
+local TPNPCTab = TPSection:Tab({
+    Title = "NPC",
+    Icon = "user-round-search",
+    Locked = false,
+})
+local NPCSection = TPNPCTab:Section({ 
+    Title = "TP to NPC",
+    Icon = "user-round-search",
+})
+
+-- ฟังก์ชันดึงรายชื่อ NPC จาก workspace.ServiceNPCs
+local function getNPCNames()
+    local names = {}
+    local serviceNPCs = workspace:FindFirstChild("ServiceNPCs")
+    if serviceNPCs then
+        for _, child in ipairs(serviceNPCs:GetChildren()) do
+            table.insert(names, child.Name)
+        end
+    end
+    table.sort(names)  -- เรียงตามตัวอักษร
+    return names
+end
+
+-- ตัวแปรเก็บ Dropdown เพื่อใช้รีเฟรช
+local npcDropdown
+
+-- ปุ่มรีเฟรชรายชื่อ
+TPNPCTab:Button({
+    Title = "Refresh NPC List",
+    Desc = "Refresh the list of NPCs in the dropdown",
+    Icon = "refresh-ccw",
+    Callback = function()
+        local newList = getNPCNames()
+        if npcDropdown then
+            npcDropdown:SetValues(newList)
+            WindUI:Notify({
+                Title = "Refreshed",
+                Content = "พบ NPC ทั้งหมด " .. #newList .. " ตัว",
+                Duration = 2,
+                Icon = "refresh",
+            })
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ไม่พบ Dropdown",
+                Duration = 2,
+                Icon = "alert",
+            })
+        end
+    end
+})
+
+-- Dropdown เลือก NPC
+npcDropdown = TPNPCTab:Dropdown({
+    Title = "Select NPC",
+    Desc = "Select an NPC to teleport to",
+    Values = getNPCNames(),
+    Value = "",
+    Callback = function(option)
+        if option == "" then return end
+
+        -- ค้นหา NPC ใน workspace.ServiceNPCs
+        local npc = workspace:FindFirstChild("ServiceNPCs") and workspace.ServiceNPCs:FindFirstChild(option)
+        if not npc then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ไม่พบ NPC: " .. option,
+                Duration = 2,
+                Icon = "alert",
+            })
+            return
+        end
+
+        -- หา HumanoidRootPart ของผู้เล่น
+        if not hrp then
+            local char = player.Character
+            if char then
+                hrp = char:FindFirstChild("HumanoidRootPart")
+            end
+        end
+        if not hrp then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "ไม่พบ HumanoidRootPart",
+                Duration = 2,
+                Icon = "alert",
+            })
+            return
+        end
+
+        -- ได้ตำแหน่งของ NPC (ใช้ GetPivot() รองรับทั้ง Model และ BasePart)
+        local targetCF = npc:GetPivot()
+        hrp.CFrame = targetCF * CFrame.new(0, 3, 0)  -- ยกสูงขึ้นเล็กน้อย
+
+        WindUI:Notify({
+            Title = "Teleported",
+            Content = "TP to " .. option,
+            Duration = 2,
+            Icon = "check",
+        })
+    end
+})
+
+-- ===== Stats =====
+local StatsSection = Window:Section({
+    Title = "Stats",
+    Icon = "chart-column-decreasing",
+    Opened = false,
+})
+local StatsTab = StatsSection:Tab({
+    Title = "Stats",
+    Icon = "chart-column-decreasing",
+    Locked = false,
+})
+local StatsSection = StatsTab:Section({ 
+    Title = "Stats",
+    Icon = "chart-column-decreasing",
+})
+
+local statDropdown = StatsTab:Dropdown({
+    Title = "Section Stats",
+    Desc = "Select stats to upgrade",
+    Values = { "Power", "Sword", "Defense", "Melee" },
+    Value = {},
+    Multi = true,
+    AllowNone = true,
+    Callback = function(option)
+        selectedStats = option
+    end
+})
+
+local statAmountInput = StatsTab:Input({
+    Title = "Input Number Stat points Stats",
+    Desc = "Number of points to allocate per stat per cycle",
+    Value = "1",
+    InputIcon = "chart-no-axes-column-decreasing",
+    Type = "Input",
+    Placeholder = "Enter amount",
+    Callback = function(input)
+        statsAmount = tonumber(input) or 1
+        if statsAmount < 1 then statsAmount = 1 end
+    end
+})
+
+local statsToggle = StatsTab:Toggle({
+    Title = "Auto up Stats",
+    Desc = "Auto allocate stats",
+    Icon = "chart-pie",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if #selectedStats == 0 then
+                WindUI:Notify({
+                    Title = "Warning",
+                    Content = "Please select at least one stat",
+                    Duration = 2,
+                    Icon = "alert",
+                })
+                statsToggle:SetValue(false)
+                return
+            end
+            if not autoStatsRunning then
+                autoStatsRunning = true
+                spawn(autoStatsLoop)
+            end
+        else
+            autoStatsRunning = false
+        end
+    end
+})
+
+-- ===== Shop =====
+local ShopSection = Window:Section({
+    Title = "Shop",
+    Icon = "shopping-cart",
+    Opened = false,
+})
+local ShopTab = ShopSection:Tab({
+    Title = "Npc Shop",
+    Icon = "store",
+    Locked = false,
+})
+local SellSection = ShopTab:Section({ 
+    Title = "Shop weapon",
+    Icon = "sword",
+})
+ShopTab:Button({
+    Title = "Katana(New Players)",
+    Desc = "You need 2,500 Money",
+    Locked = false,
+    Callback = function()
+        if not hrp then
+            local char = player.Character
+            if char then
+                hrp = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not hrp then
+                WindUI:Notify({
+                    Title = "Error",
+                    Content = "ไม่พบตัวละคร",
+                    Duration = 3,
+                    Icon = "alert",
+                })
+                return
+            end
+        end
+
+        local money = player.Data.Money.Value
+        local gems = player.Data.Gems.Value
+        local requiredMoney = 2500
+        local requiredGems = 0
+
+        if money >= requiredMoney and gems >= requiredGems then
+            local npc = workspace.ServiceNPCs and workspace.ServiceNPCs:FindFirstChild("Katana")
+            if npc then
+                local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc
+                if npcRoot then
+                    hrp.CFrame = npcRoot.CFrame * CFrame.new(0, 0, 3)
+                    task.wait(0.5)
+
+                    local prompt = npc:FindFirstChildOfClass("ProximityPrompt") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt then
+                        prompt:InputHoldBegin()
+                        task.wait(1)
+                        prompt:InputHoldEnd()
+                        WindUI:Notify({
+                            Title = "Katana",
+                            Content = "Purchase completed",
+                            Duration = 2,
+                            Icon = "check",
+                        })
+                    else
+                        WindUI:Notify({
+                            Title = "ไม่พบ ProximityPrompt",
+                            Content = "อาจต้องซื้อด้วยวิธีอื่น",
+                            Duration = 3,
+                            Icon = "alert",
+                        })
+                    end
+                else
+                    WindUI:Notify({
+                        Title = "ไม่พบตำแหน่ง NPC",
+                        Content = "ไม่พบ HumanoidRootPart ของ NPC",
+                        Duration = 3,
+                        Icon = "alert",
+                    })
+                end
+            else
+                WindUI:Notify({
+                    Title = "ไม่พบ NPC",
+                    Content = "ไม่พบ DarkBladeNPC ใน workspace.ServiceNPCs",
+                    Duration = 3,
+                    Icon = "alert",
+                })
+            end
+        else
+            local needMoney = requiredMoney - money
+            local needGems = requiredGems - gems
+            WindUI:Notify({
+                Title = "เงินหรือเพชรไม่พอ",
+                Content = string.format("ขาดเงิน %d และเพชร %d", needMoney, needGems),
+                Duration = 5,
+                Icon = "alert-triangle",
+            })
+        end
+    end
+})
+ShopTab:Button({
+    Title = "Dark Blade(recommend new players)",
+    Desc = "You need 250k Money and 150 Gems",
+    Locked = false,
+    Callback = function()
+        if not hrp then
+            local char = player.Character
+            if char then
+                hrp = char:FindFirstChild("HumanoidRootPart")
+            end
+            if not hrp then
+                WindUI:Notify({
+                    Title = "Error",
+                    Content = "ไม่พบตัวละคร",
+                    Duration = 3,
+                    Icon = "alert",
+                })
+                return
+            end
+        end
+
+        local money = player.Data.Money.Value
+        local gems = player.Data.Gems.Value
+        local requiredMoney = 250000
+        local requiredGems = 150
+
+        if money >= requiredMoney and gems >= requiredGems then
+            local npc = workspace.ServiceNPCs and workspace.ServiceNPCs:FindFirstChild("DarkBladeNPC")
+            if npc then
+                local npcRoot = npc:FindFirstChild("HumanoidRootPart") or npc:FindFirstChild("Torso") or npc
+                if npcRoot then
+                    hrp.CFrame = npcRoot.CFrame * CFrame.new(0, 0, 3)
+                    task.wait(0.5)
+
+                    local prompt = npc:FindFirstChildOfClass("ProximityPrompt") or npc:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt then
+                        prompt:InputHoldBegin()
+                        task.wait(0.1)
+                        prompt:InputHoldEnd()
+                        WindUI:Notify({
+                            Title = "Dark Blade",
+                            Content = "Purchase completed",
+                            Duration = 2,
+                            Icon = "check",
+                        })
+                    else
+                        WindUI:Notify({
+                            Title = "ไม่พบ ProximityPrompt",
+                            Content = "อาจต้องซื้อด้วยวิธีอื่น",
+                            Duration = 3,
+                            Icon = "alert",
+                        })
+                    end
+                else
+                    WindUI:Notify({
+                        Title = "ไม่พบตำแหน่ง NPC",
+                        Content = "ไม่พบ HumanoidRootPart ของ NPC",
+                        Duration = 3,
+                        Icon = "alert",
+                    })
+                end
+            else
+                WindUI:Notify({
+                    Title = "ไม่พบ NPC",
+                    Content = "ไม่พบ DarkBladeNPC ใน workspace.ServiceNPCs",
+                    Duration = 3,
+                    Icon = "alert",
+                })
+            end
+        else
+            local needMoney = requiredMoney - money
+            local needGems = requiredGems - gems
+            WindUI:Notify({
+                Title = "เงินหรือเพชรไม่พอ",
+                Content = string.format("ขาดเงิน %d และเพชร %d", needMoney, needGems),
+                Duration = 5,
+                Icon = "alert-triangle",
+            })
+        end
+    end
+})
+
+-- ===== Setting =====
+Window:Divider()
+local SettingSection = Window:Section({
+    Title = "Setting",
+    Icon = "cog",
+    Opened = false,
+})
+
+local PlayersTab = SettingSection:Tab({
+    Title = "Players",
+    Icon = "user-round",
+    Locked = false,
+})
+
+-- Walk Speed
+local walkSpeedSlider
+local walkSpeedToggle
+
+walkSpeedSlider = PlayersTab:Slider({
+    Title = "Set walk speed",
+    Desc = "Set the walk speed of your character.",
+    Step = 1,
+    Value = {
+        Min = 16,
+        Max = 500,
+        Default = 16,
+    },
+    Callback = function(value)
+        customWalkSpeed = value
+        if walkSpeedEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = customWalkSpeed
+        end
+    end
+})
+
+walkSpeedToggle = PlayersTab:Toggle({
+    Title = "Toggle Walk Speed",
+    Desc = "Toggle to apply the custom walk speed",
+    Icon = "bird",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            -- เปิด: บันทึกค่าเริ่มต้นจาก Humanoid
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                local humanoid = player.Character.Humanoid
+                defaultWalkSpeed = humanoid.WalkSpeed
+                walkSpeedSlider:SetValue(defaultWalkSpeed)  -- อัปเดต slider
+                customWalkSpeed = defaultWalkSpeed
+            end
+            walkSpeedEnabled = true
+        else
+            -- ปิด: คืนค่าเริ่มต้น
+            walkSpeedEnabled = false
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                player.Character.Humanoid.WalkSpeed = defaultWalkSpeed
+            end
+        end
+    end
+})
+
+-- Jump Power
+local jumpPowerSlider
+local jumpPowerToggle
+
+jumpPowerSlider = PlayersTab:Slider({
+    Title = "Set Jump Power",
+    Desc = "Set the jump power of your character.",
+    Step = 1,
+    Value = {
+        Min = 50,
+        Max = 500,
+        Default = 50,
+    },
+    Callback = function(value)
+        customJumpPower = value
+        if jumpPowerEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.JumpPower = customJumpPower
+        end
+    end
+})
+
+jumpPowerToggle = PlayersTab:Toggle({
+    Title = "Toggle Jump Power",
+    Desc = "Toggle to apply the custom jump power",
+    Icon = "bird",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                local humanoid = player.Character.Humanoid
+                defaultJumpPower = humanoid.JumpPower
+                jumpPowerSlider:SetValue(defaultJumpPower)
+                customJumpPower = defaultJumpPower
+            end
+            jumpPowerEnabled = true
+        else
+            jumpPowerEnabled = false
+            if player.Character and player.Character:FindFirstChild("Humanoid") then
+                player.Character.Humanoid.JumpPower = defaultJumpPower
+            end
+        end
+    end
+})
+
+-- Infinite Jump
+local infiniteJumpToggle = PlayersTab:Toggle({
+    Title = "Toggle Infinite Jump",
+    Desc = "Toggle to enable infinite jumping",
+    Icon = "bird",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        infiniteJumpEnabled = state
+        if state then
+            enableInfiniteJump()
+        else
+            disableInfiniteJump()
+        end
+    end
+})
+
+-- NoClip (ใช้ฟังก์ชัน enableNoclip / disableNoclip ที่มีอยู่แล้ว)
+PlayersTab:Toggle({
+    Title = "Toggle NoClip",
+    Desc = "Toggle to enable noclip",
+    Icon = "bird",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        noclipEnabled = state
+        if state then
+            enableNoclip()
+        else
+            disableNoclip()
+        end
+    end
+})
+
+PlayersTab:Divider()
+
+-- Fly Speed Slider
+local flySpeedSlider = PlayersTab:Slider({
+    Title = "Fly Speed",
+    Desc = "Set the fly speed",
+    Step = 1,
+    Value = {
+        Min = 10,
+        Max = 500,
+        Default = 20,
+    },
+    Callback = function(value)
+        flySpeed = value
+    end
+})
+
+-- Fly Toggle
+local flyToggle = PlayersTab:Toggle({
+    Title = "Toggle Fly",
+    Desc = "Toggle to enable fly",
+    Icon = "bird",
+    Type = "Checkbox",
+    Value = false,
+    Callback = function(state)
+        if state then
+            enableFly()
+        else
+            disableFly()
+        end
+    end
+})
+
+-- UI Keybind Tab (คงเดิม)
+local Tab = SettingSection:Tab({
+    Title = "Ui",
+    Icon = "settings",
+    Locked = false,
+})
+Tab:Keybind({
+    Title = "Keybind",
+    Desc = "Keybind to open ui",
+    Value = "J",
+    Callback = function(v)
+        Window:SetToggleKey(Enum.KeyCode[v])
+    end
+})
+
+-- เริ่มต้นระบบอาวุธ
+setupBackpackListener()
