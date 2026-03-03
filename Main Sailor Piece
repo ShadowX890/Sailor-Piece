@@ -1863,7 +1863,14 @@ local function disableFly()
 end
 
 -- === UI ===
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local WindUILoad = pcall(function()
+    return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+end)
+if not WindUILoad then
+    warn("Failed to load WindUI - ลิงก์อาจเสียหรือไม่สามารถเข้าถึงได้")
+    return
+end
+local WindUI = WindUILoad
 local Window = WindUI:CreateWindow({
     Title = "Sailor Piece",
     Icon = "rbxassetid://118253533466049",
