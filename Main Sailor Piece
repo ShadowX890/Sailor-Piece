@@ -2,21 +2,21 @@ local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local VirtualInput = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
 
--- ตัวแปรสำหรับ Auto Farm
+-- ===== ตัวแปรหลัก =====
 local autoFarmRunning = false
 local currentTarget = nil
 local lastAttackTime = 0
 local attackCooldown = 0.2
 local hrp = nil
 
--- ตัวแปรสำหรับ Auto Quest
 local lastQuestCheck = 0
 local questCheckInterval = 2
 local lastAcceptedQuest = nil
 
--- ตัวแปรสำหรับ Auto Haki
-local VirtualInput = game:GetService("VirtualInputManager")
+-- Haki Quests
 local quest1Running = false
 local quest2Running = false
 local quest3Running = false
@@ -25,35 +25,21 @@ local lastQuest2Time = 0
 local lastQuest3Time = 0
 local questCooldown = 0.2
 
--- ตัวแปรสำหรับ Noclip
+-- Noclip
 local noclipConnection = nil
 
--- ตัวแปรสำหรับเลือกอาวุธ
+-- อาวุธ
 local selectedWeapon = ""
 local weaponDropdown = nil
 
--- ตัวแปรสำหรับ Auto Skill (แยก toggle แต่ละปุ่ม)
-local skillToggles = {
-    Z = false,
-    X = false,
-    C = false,
-    V = false,
-    B = false
-}
-local lastSkillPressTime = {
-    Z = 0,
-    X = 0,
-    C = 0,
-    V = 0,
-    B = 0
-}
+-- Auto Skill
+local skillToggles = { Z = false, X = false, C = false, V = false, B = false }
+local lastSkillPressTime = { Z = 0, X = 0, C = 0, V = 0, B = 0 }
 local skillPressCooldown = 0.5
 
--- ตัวแปรสำหรับ Auto Haki (Buso และ Observation)
+-- Haki
 local autoBusoHaki = false
 local autoObservationHaki = false
-
--- ตัวแปรสำหรับตรวจสอบ Observation Haki
 local lastObservationCheck = 0
 local observationCheckCooldown = 1
 local lastObservationRemoteTime = 0
@@ -62,20 +48,20 @@ local minRemoteInterval = 5
 local busoInitialized = false
 local observationInitialized = false
 
--- ตัวแปรสำหรับ Auto Stats
+-- Stats
 local autoStatsRunning = false
 local selectedStats = {}
 local statsAmount = 1
 local lastStatTime = 0
 local statCooldown = 0.5
 
--- ตัวแปรสำหรับ Priority Loop
+-- Priority Loop
 local autoPriorityRunning = false
 local priorityLoopThread = nil
 local lastNoTargetNotify = 0
 local noTargetNotifyCooldown = 5
 
--- ตัวแปรสำหรับ Auto Open Chest
+-- Chest
 local autoOpenChestRunning = false
 local selectedChests = {}
 local chestList = {"Common Chest", "Rare Chest", "Epic Chest", "Legendary Chest", "Mythical Chest"}
@@ -83,28 +69,30 @@ local openChestAmount = 1
 local lastOpenChestTime = 0
 local openChestCooldown = 1
 
--- ตัวแปรสำหรับ Auto Dungeon
-local selectedDungeon = ""  -- เก็บค่าดันจ์ที่เลือก ("CidDungeon", "RuneDungeon", "DoubleDungeon")
+-- Dungeon
+local selectedDungeon = ""
 local autoDungeonRunning = false
 local autoLeaveDungeonRunning = false
 local lastDungeonAttempt = 0
 local dungeonCooldown = 10
--- ตัวแปรสำหรับ In-Dungeon features
-local selectedDungeonDifficulty = "Easy"  -- ระดับความยากที่เลือก
+
+-- In-Dungeon
+local selectedDungeonDifficulty = "Easy"
 local autoVoteDifficultyRunning = false
 local autoKillDungeonMobsRunning = false
 local autoSafePlayerRunning = false
-local healthThreshold = 50  -- ค่าเริ่มต้น 50%
+local healthThreshold = 50
 local lastVoteTime = 0
-local voteCooldown = 5  -- ส่งโหวตทุก 5 วินาที
+local voteCooldown = 5
 local dungeonRespawnPoint = Vector3.new(200.586533, 91.022751, 11.037479)
 local safePlayerPosition = Vector3.new(200.223633, 351.271027, 28.078144)
--- ตัวแปรสำหรับ Auto Replay
+
+-- Auto Replay
 local autoReplayRunning = false
 local lastReplayTime = 0
-local replayCooldown = 5   -- ส่ง request ทุก 5 วินาที
+local replayCooldown = 5
 
--- ตัวแปรสำหรับ Auto Summon Boss
+-- Summon Boss
 local autoSummonRunning = false
 local selectedSummonBoss = "SaberBoss"
 local selectedDifficulty = "Normal"
@@ -198,7 +186,6 @@ local mobGroupList = {
     { name = "Curse", spawnKey = 7000, monsters = {"Curse1","Curse2","Curse3","Curse4","Curse5"} },
     { name = "Slime", spawnKey = 8000, monsters = {"Slime1","Slime2","Slime3","Slime4","Slime5"} },
     { name = "AcademyTeacher", spawnKey = 9000, monsters = {"AcademyTeacher1","AcademyTeacher2","AcademyTeacher3","AcademyTeacher4","AcademyTeacher5"} },
-    --{ name = "Cupid Striker", spawnKey = 10000, monsters = {"Valentine1","Valentine2","Valentine3","Valentine4","Valentine5"} },
 }
 local mobGroupNames = {}
 for _, g in ipairs(mobGroupList) do table.insert(mobGroupNames, g.name) end
@@ -215,7 +202,6 @@ local bossList = {
     { name = "JinwooBoss", display = "Jinwoo Boss", spawnPos = Vector3.new(249.031830, 166.316544, 916.186401) },
     { name = "AizenBoss", display = "Aizen Boss", spawnPos = Vector3.new(-570.791687, 98.074898, 1265.189697) },
     { name = "AlucardBoss", display = "Alucard Boss", spawnPos = Vector3.new(249.031830, 166.316544, 916.186401) },
-    --{ name = "MadokaBoss", display = "Madoka Boss", spawnPos = Vector3.new(-1293.987061, 39.018612, -1133.032959) },
     { name = "SaberBoss", display = "Saber Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
     { name = "QinShiBoss", display = "Qin Shi Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
     { name = "IchigoBoss", display = "Ichigo Boss", spawnPos = Vector3.new(796.259155, -0.897194, -1180.577637) },
@@ -227,11 +213,8 @@ local bossList = {
 local bossNames = {}
 for _, b in ipairs(bossList) do table.insert(bossNames, b.display) end
 
--- ตัวแปรสำหรับ Auto Farm Bosses
 local autoBossRunning = false
 local selectedBosses = {}
-
--- สำหรับควบคุมความถี่ในการแจ้งเตือนบอส
 local lastBossNotify = {}
 local bossNotifyCooldown = 5
 local lastNoBossNotify = 0
@@ -273,10 +256,10 @@ local function getSpawnCFrame(level)
     return CFrame.new(hrp.Position.X, floatHeight, hrp.Position.Z)
 end
 
--- ตัวแปรสำหรับ Auto Slime Piece
+-- Auto Slime Piece
 local autoSlimePieceRunning = false
 local slimePieceLocations = {
-    { name = "DesertIsland", pos = Vector3.new(-850.394897, 6.777895, -440.760315) },  -- พิกัดกลางเกาะ Desert
+    { name = "DesertIsland", pos = Vector3.new(-850.394897, 6.777895, -440.760315) },
     { name = "SnowIsland", pos = Vector3.new(-493.497192, 13.393859, -1016.845459) },
     { name = "StarterIsland", pos = Vector3.new(164.981308, 16.329741, -215.994843) },
     { name = "JungleIsland", pos = Vector3.new(-515.602844, -1.045176, 426.184021) },
@@ -285,21 +268,19 @@ local slimePieceLocations = {
     { pos = Vector3.new(787.80126953125, 64.3216552734375, -2309.12841796875), name = "Final Spot" },
 }
 
-
--- ตัวแปรสำหรับ Player Settings (เพิ่ม default)
-local walkSpeedEnabled = false
-local customWalkSpeed = 16  -- ค่าเริ่มต้นคร่าว ๆ (จะถูกแทนที่ด้วยค่าจริงตอนเปิด toggle)
-local defaultWalkSpeed = 16  -- เก็บค่าเริ่มต้นของเกม
-local jumpPowerEnabled = false
-local customJumpPower = 50
+-- ===== ตัวแปร Players ใหม่ =====
+local jumpValue = 50
+local speedValue = 30
+local jumpToggleState = false
+local speedToggleState = false
+local defaultWalkSpeed = 16
 local defaultJumpPower = 50
---local infiniteJumpEnabled = false
 local noclipEnabled = false
 local flyEnabled = false
 local flySpeed = 20
 local flyConnection = nil
---local infiniteJumpConnection = nil
-local UserInputService = game:GetService("UserInputService")
+local bodyVelocity = nil
+local bodyGyro = nil
 
 -- =======================================
 
@@ -396,11 +377,12 @@ local function onCharacterAdded(newChar)
     currentTarget = nil
 
     local humanoid = newChar:WaitForChild("Humanoid")
-    if walkSpeedEnabled then
-        humanoid.WalkSpeed = customWalkSpeed
+    -- ใช้ตัวแปรใหม่
+    if speedToggleState then
+        humanoid.WalkSpeed = speedValue
     end
-    if jumpPowerEnabled then
-        humanoid.JumpPower = customJumpPower
+    if jumpToggleState then
+        humanoid.JumpPower = jumpValue
     end
     if noclipEnabled then
         enableNoclip()
@@ -426,7 +408,6 @@ local function onCharacterAdded(newChar)
             end
         end
 
-        -- เฉพาะ Auto Farm Level เท่านั้นที่ต้องหาเป้าหมายใหม่ที่นี่
         if autoFarmRunning then
             local level = levelValue.Value
             local currentMode = nil
@@ -472,6 +453,7 @@ if player.Character then
     onCharacterAdded(player.Character)
 end
 
+-- ===== ฟังก์ชันหลักของระบบต่างๆ =====
 local function autoFarmLoop()
     local success, err = pcall(function()
         while autoFarmRunning do
@@ -507,7 +489,7 @@ local function autoFarmLoop()
             local questUI = player.PlayerGui:FindFirstChild("QuestUI")
             local questFrame = questUI and questUI:FindFirstChild("Quest")
 
-            -- 🔁 ตรวจสอบ Observation Haki ถ้าเปิดใช้งาน
+            -- Observation Haki check
             if autoObservationHaki and autoFarmRunning then
                 if now >= lastObservationCheck + observationCheckCooldown then
                     local cooldownUI = player.PlayerGui:FindFirstChild("CooldownUI")
@@ -516,33 +498,24 @@ local function autoFarmLoop()
                         local mainFrame = cooldownUI:FindFirstChild("MainFrame")
                         if mainFrame then
                             local obsCooldown = mainFrame:FindFirstChild("Cooldown_ObsHaki_Observation")
-                            if obsCooldown then
-                                inCooldown = true
-                            end
+                            if obsCooldown then inCooldown = true end
                         end
                     end
-
                     local dodgeUI = player.PlayerGui:FindFirstChild("DodgeCounterUI")
                     local hakiOn = false
                     if dodgeUI then
                         local mainFrame = dodgeUI:FindFirstChild("MainFrame")
-                        if mainFrame and mainFrame.Visible then
-                            hakiOn = true
-                        end
+                        if mainFrame and mainFrame.Visible then hakiOn = true end
                     end
-
                     if not inCooldown and not hakiOn then
                         if now >= lastObservationRemoteTime + minRemoteInterval then
                             local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("ObservationHakiRemote")
                             if remote then
-                                pcall(function()
-                                    remote:FireServer({ "Toggle" })
-                                end)
+                                pcall(function() remote:FireServer({ "Toggle" }) end)
                                 lastObservationRemoteTime = now
                             end
                         end
                     end
-
                     lastObservationCheck = now
                 end
             end
@@ -723,7 +696,7 @@ local function findMobTarget()
     return nil
 end
 
--- ฟังก์ชัน Priority Loop (รวม Boss และ Mob)
+-- Priority Loop (รวม Boss และ Mob)
 local function autoPriorityLoop()
     print("autoPriorityLoop started")
     local currentSpawnIndex = 1
@@ -923,7 +896,6 @@ local function autoPriorityLoop()
     end
 end
 
--- ฟังก์ชันอัปเดต Priority Loop
 local function updatePriorityLoop()
     local shouldRun = (autoBossRunning and #selectedBosses > 0) or (autoMobRunning and #selectedMobGroups > 0)
     if shouldRun and not autoPriorityRunning then
@@ -938,14 +910,7 @@ local function updatePriorityLoop()
     end
 end
 
-local function autoMobLoop()
-    -- (ไม่ได้ใช้แล้ว แต่คงไว้)
-end
-
-local function autoBossLoop()
-    -- (ไม่ได้ใช้แล้ว แต่คงไว้)
-end
-
+-- Quests Haki
 local function quest1Loop()
     while quest1Running do
         if not hrp then
@@ -1021,6 +986,7 @@ local function quest3Loop()
     end
 end
 
+-- Stats
 local function allocateStat(statName, amount)
     local remote = ReplicatedStorage:FindFirstChild("RemoteEvents") and ReplicatedStorage.RemoteEvents:FindFirstChild("AllocateStat")
     if not remote then
@@ -1053,7 +1019,7 @@ local function autoStatsLoop()
     end
 end
 
--- ฟังก์ชัน Auto Summon Loop
+-- Summon Boss Loop
 local function autoSummonLoop()
     print("autoSummonLoop started")
     local success, err = pcall(function()
@@ -1138,7 +1104,7 @@ local function autoSummonLoop()
     print("autoSummonLoop ended")
 end
 
--- ฟังก์ชัน Auto Chest Loop
+-- Chest Loop
 local function autoOpenChestLoop()
     print("autoOpenChestLoop started")
     local success, err = pcall(function()
@@ -1166,7 +1132,7 @@ local function autoOpenChestLoop()
     print("autoOpenChestLoop ended")
 end
 
--- ฟังก์ชันสำหรับ Teleport ไปยัง NPC (รับชื่อ NPC)
+-- Teleport to NPC
 local function teleportToNPC(npcName)
     local npc = workspace:FindFirstChild("ServiceNPCs") and workspace.ServiceNPCs:FindFirstChild(npcName)
     if not npc then
@@ -1195,7 +1161,7 @@ local function teleportToNPC(npcName)
     return false
 end
 
--- ฟังก์ชันแสดงข้อมูล Summon Boss (Frame ใหม่)
+-- Show Summon Info Frame (เหมือนเดิม)
 local function showSummonInfoFrame()
     -- ลบหน้าต่างเก่า
     local existing = player.PlayerGui:FindFirstChild("SummonInfoGui")
@@ -1209,7 +1175,6 @@ local function showSummonInfoFrame()
     local viewport = workspace.CurrentCamera.ViewportSize
     local isSmall = viewport.X < 500
 
-    -- ขนาดเฟรมหลัก: 90% กว้าง 80% สูง แต่ไม่เกิน 600x450
     local frameWidth = math.min(600, viewport.X * 0.9)
     local frameHeight = math.min(450, viewport.Y * 0.8)
 
@@ -1288,7 +1253,6 @@ local function showSummonInfoFrame()
     padding.PaddingLeft = UDim.new(0, 5)
     padding.PaddingRight = UDim.new(0, 5)
 
-    -- กำหนด font sizes
     local headerFontSize = isSmall and 18 or 16
     local normalFontSize = isSmall and 16 or 14
     local bossButtonFontSize = isSmall and 18 or 16
@@ -1306,7 +1270,6 @@ local function showSummonInfoFrame()
     normalHeader.TextSize = headerFontSize
     normalHeader.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Normal Bosses list
     for _, boss in ipairs(summonBossList) do
         if not boss.hasDifficulty then
             local info = getSummonInfoText(boss.name, nil)
@@ -1339,10 +1302,8 @@ local function showSummonInfoFrame()
     diffHeader.TextSize = headerFontSize
     diffHeader.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Difficulty Bosses with toggle
     for _, boss in ipairs(summonBossList) do
         if boss.hasDifficulty then
-            -- Boss button
             local bossButton = Instance.new("TextButton")
             bossButton.Parent = contentFrame
             bossButton.Size = UDim2.new(1, 0, 0, 30)
@@ -1356,7 +1317,6 @@ local function showSummonInfoFrame()
             btnCorner.CornerRadius = UDim.new(0, 4)
             btnCorner.Parent = bossButton
 
-            -- Frame สำหรับรายละเอียด difficulty (เริ่มซ่อน)
             local diffFrame = Instance.new("Frame")
             diffFrame.Name = boss.name .. "DiffFrame"
             diffFrame.Parent = contentFrame
@@ -1376,7 +1336,6 @@ local function showSummonInfoFrame()
                 end
             end)
 
-            -- เพิ่มแต่ละ difficulty
             for _, diff in ipairs(difficultyList) do
                 local info = getSummonInfoText(boss.name, diff)
                 local diffLabel = Instance.new("TextLabel")
@@ -1404,7 +1363,7 @@ local function showSummonInfoFrame()
     end
 end
 
--- ฟังก์ชันสำหรับพยายามเข้าดันจ์
+-- Dungeon functions (เหมือนเดิม)
 local function attemptEnterDungeon()
     if selectedDungeon == "" then
         WindUI:Notify({
@@ -1416,14 +1375,12 @@ local function attemptEnterDungeon()
         return false
     end
 
-    -- เรียก remote เปิด portal
     local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("RequestDungeonPortal")
     local args = { selectedDungeon }
     remote:FireServer(unpack(args))
 
     task.wait(1)
 
-    -- หา ActiveDungeonPortal
     local portal = workspace:FindFirstChild("ActiveDungeonPortal")
     if not portal then
         WindUI:Notify({
@@ -1449,13 +1406,11 @@ local function attemptEnterDungeon()
         return false
     end
 
-    -- TP ไปที่ portal (ยืนด้านหน้าเล็กน้อย)
     local portalCF = portal:GetPivot()
     hrp.CFrame = portalCF * CFrame.new(0, 0, -3)
 
     task.wait(0.5)
 
-    -- จำลองกด E ค้าง 0.8 วินาที
     VirtualInput:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(0.8)
     VirtualInput:SendKeyEvent(false, Enum.KeyCode.E, false, game)
@@ -1469,7 +1424,6 @@ local function attemptEnterDungeon()
     return true
 end
 
--- ฟังก์ชันสำหรับเรียก remote เปิด portal (ไม่วาร์ป, ไม่กด E)
 local function requestOpenDungeonPortal()
     if selectedDungeon == "" then
         WindUI:Notify({
@@ -1494,19 +1448,17 @@ local function requestOpenDungeonPortal()
     return true
 end
 
--- Auto Dungeon Loop
 local function autoDungeonLoop()
     while autoDungeonRunning do
         local now = tick()
         if now >= lastDungeonAttempt + dungeonCooldown then
-            requestOpenDungeonPortal()   -- เปลี่ยนจาก attemptEnterDungeon มาใช้อันนี้
+            requestOpenDungeonPortal()
             lastDungeonAttempt = now
         end
         RunService.Heartbeat:Wait()
     end
 end
 
--- Auto Leave Loop
 local function autoLeaveLoop()
     while autoLeaveDungeonRunning do
         local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("LeaveDungeonPortal")
@@ -1524,9 +1476,7 @@ local function autoLeaveLoop()
     end
 end
 
--- ฟังก์ชันสำหรับเข้า dungeon ที่มี portal อยู่แล้ว (ไม่เรียก remote)
 local function joinExistingDungeon()
-    -- หา portal
     local portal = workspace:FindFirstChild("ActiveDungeonPortal")
     if not portal then
         WindUI:Notify({
@@ -1538,12 +1488,9 @@ local function joinExistingDungeon()
         return false
     end
 
-    -- หา HumanoidRootPart ผู้เล่น
     if not hrp then
         local char = player.Character
-        if char then
-            hrp = char:FindFirstChild("HumanoidRootPart")
-        end
+        if char then hrp = char:FindFirstChild("HumanoidRootPart") end
     end
     if not hrp then
         WindUI:Notify({
@@ -1555,13 +1502,11 @@ local function joinExistingDungeon()
         return false
     end
 
-    -- Teleport ไปที่ portal (ยืนด้านหน้าเล็กน้อย)
     local portalCF = portal:GetPivot()
     hrp.CFrame = portalCF * CFrame.new(0, 0, -3)
 
-    task.wait(0.5)  -- รอให้ ProximityPrompt ปรากฏ
+    task.wait(0.5)
 
-    -- กด E ค้าง 0.8 วินาที
     VirtualInput:SendKeyEvent(true, Enum.KeyCode.E, false, game)
     task.wait(0.8)
     VirtualInput:SendKeyEvent(false, Enum.KeyCode.E, false, game)
@@ -1575,7 +1520,6 @@ local function joinExistingDungeon()
     return true
 end
 
--- Auto Vote Difficulty Loop
 local function autoVoteDifficultyLoop()
     while autoVoteDifficultyRunning do
         local now = tick()
@@ -1595,7 +1539,6 @@ local function autoVoteDifficultyLoop()
     end
 end
 
--- Auto Kill Dungeon Mobs Loop
 local function autoKillDungeonMobsLoop()
     while autoKillDungeonMobsRunning do
         if not hrp then
@@ -1607,7 +1550,6 @@ local function autoKillDungeonMobsLoop()
             continue
         end
 
-        -- 🔁 เพิ่มส่วนนี้: ตรวจสอบและสวมใส่อาวุธที่เลือก
         if selectedWeapon ~= "" then
             local character = player.Character
             if character then
@@ -1624,7 +1566,6 @@ local function autoKillDungeonMobsLoop()
             end
         end
 
-        -- หา mob จาก npcFolder (workspace.NPCs)
         local target = nil
         for _, mob in ipairs(npcFolder:GetChildren()) do
             local humanoid = mob:FindFirstChild("Humanoid")
@@ -1636,7 +1577,6 @@ local function autoKillDungeonMobsLoop()
         end
 
         if target then
-            -- โจมตี
             local root = target:FindFirstChild("HumanoidRootPart")
             if root then
                 local behindPos = root.Position + root.CFrame.LookVector * -attackDistance
@@ -1649,7 +1589,6 @@ local function autoKillDungeonMobsLoop()
                     lastAttackTime = now
                 end
 
-                -- ใช้ skill auto ถ้าเปิด
                 for skillName, enabled in pairs(skillToggles) do
                     if enabled then
                         local lastTime = lastSkillPressTime[skillName] or 0
@@ -1666,7 +1605,6 @@ local function autoKillDungeonMobsLoop()
                 end
             end
         else
-            -- ไม่มี mob: วาร์ปไป respawn point
             hrp.CFrame = CFrame.new(dungeonRespawnPoint) * CFrame.new(0, 3, 0)
             hrp.Anchored = true
             hrp.Velocity = Vector3.zero
@@ -1677,7 +1615,6 @@ local function autoKillDungeonMobsLoop()
     end
 end
 
--- Auto Safe Player Loop
 local function autoSafePlayerLoop()
     while autoSafePlayerRunning do
         if not hrp then
@@ -1689,7 +1626,6 @@ local function autoSafePlayerLoop()
             if humanoid then
                 local healthPercent = (humanoid.Health / humanoid.MaxHealth) * 100
                 if healthPercent < healthThreshold then
-                    -- วาร์ปไป safe spot
                     hrp.CFrame = CFrame.new(safePlayerPosition) * CFrame.new(0, 3, 0)
                     WindUI:Notify({
                         Title = "Safe Player",
@@ -1697,7 +1633,6 @@ local function autoSafePlayerLoop()
                         Duration = 2,
                         Icon = "shield",
                     })
-                    -- รอสักครู่ก่อนตรวจสอบอีกครั้ง
                     task.wait(3)
                 end
             end
@@ -1706,7 +1641,6 @@ local function autoSafePlayerLoop()
     end
 end
 
--- Auto Replay Loop
 local function autoReplayLoop()
     while autoReplayRunning do
         local now = tick()
@@ -1726,7 +1660,6 @@ local function autoReplayLoop()
     end
 end
 
--- Auto Slime Piece Loop
 local function autoSlimePieceLoop()
     while autoSlimePieceRunning do
         for _, loc in ipairs(slimePieceLocations) do
@@ -1741,14 +1674,11 @@ local function autoSlimePieceLoop()
                 continue
             end
 
-            -- วาร์ปไปที่ตำแหน่งกลางของเกาะ (หรือจุดที่กำหนด)
-            hrp.CFrame = CFrame.new(loc.pos) * CFrame.new(0, 5, 0)  -- ยกสูงขึ้นเล็กน้อย
-            task.wait(2)  -- รอให้โฟลเดอร์และโมเดลภายในโหลด
+            hrp.CFrame = CFrame.new(loc.pos) * CFrame.new(0, 5, 0)
+            task.wait(2)
 
-            -- หา SlimePuzzlePiece ทั่ว workspace
             local piece = nil
             if loc.name == "Final Spot" then
-                -- สำหรับตำแหน่งสุดท้าย ให้หาชิ้นส่วนที่ใกล้ตำแหน่งนี้ที่สุด
                 local minDist = math.huge
                 for _, obj in ipairs(workspace:GetDescendants()) do
                     if obj.Name == "SlimePuzzlePiece" and obj:IsA("BasePart") then
@@ -1760,17 +1690,15 @@ local function autoSlimePieceLoop()
                     end
                 end
             else
-                -- สำหรับเกาะทั่วไป หาชิ้นส่วนใน workspace (เพราะอาจอยู่ในโมเดลใดก็ได้ในโฟลเดอร์)
                 piece = workspace:FindFirstChild("SlimePuzzlePiece", true)
             end
 
             if piece and piece:IsA("BasePart") then
-                hrp.CFrame = piece.CFrame * CFrame.new(0, 2, 0)  -- ยืนบนชิ้นส่วน
+                hrp.CFrame = piece.CFrame * CFrame.new(0, 2, 0)
                 task.wait(0.8)
                 VirtualInput:SendKeyEvent(true, Enum.KeyCode.E, false, game)
                 task.wait(0.8)
                 VirtualInput:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                -- อาจเพิ่ม task.wait(1) เพื่อให้เกมบันทึกการเก็บ
             else
                 WindUI:Notify({
                     Title = "Slime Piece",
@@ -1780,71 +1708,85 @@ local function autoSlimePieceLoop()
                 })
             end
 
-            task.wait(1)  -- หน่วงก่อนไปตำแหน่งถัดไป
+            task.wait(1)
         end
-        -- วนซ้ำเรื่อย ๆ
     end
 end
 
--- Infinite Jump
--- local function enableInfiniteJump()
---     if infiniteJumpConnection then return end
---     infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
---         if infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
---             local humanoid = player.Character.Humanoid
---             humanoid:ChangeState("Jumping")
---         end
---     end)
--- end
+-- Jump functions
+local function applyJump()
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    humanoid.UseJumpPower = true
+    humanoid.JumpPower = jumpValue
+end
 
--- local function disableInfiniteJump()
---     if infiniteJumpConnection then
---         infiniteJumpConnection:Disconnect()
---         infiniteJumpConnection = nil
---     end
--- end
+local function resetJump()
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    humanoid.JumpPower = defaultJumpPower
+end
 
--- Fly
+-- Speed functions
+local function applySpeed()
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    humanoid.WalkSpeed = speedValue
+end
+
+local function resetSpeed()
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    humanoid.WalkSpeed = defaultWalkSpeed
+end
+
+-- Fly functions (ปรับปรุงใหม่)
 local function enableFly()
     if flyEnabled then return end
     flyEnabled = true
+    
+    local character = player.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not hrp or not humanoid then return end
+
+    humanoid.PlatformStand = true
+    
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Velocity = Vector3.zero
+    bodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+    bodyVelocity.Parent = hrp
+
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
+    bodyGyro.D = 100
+    bodyGyro.Parent = hrp
+
+    local UIS = UserInputService
+    local camera = workspace.CurrentCamera
+
     if flyConnection then flyConnection:Disconnect() end
     flyConnection = RunService.Heartbeat:Connect(function()
-        if not flyEnabled or not player.Character then return end
-        local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-        local humanoid = player.Character:FindFirstChild("Humanoid")
-        if not hrp or not humanoid then return end
-
-        -- ทำให้ Humanoid ไม่ล้ม
-        humanoid.PlatformStand = true
-
-        local moveDirection = Vector3.zero
-        local cam = workspace.CurrentCamera
-
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            moveDirection = moveDirection + cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            moveDirection = moveDirection - cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            moveDirection = moveDirection - cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            moveDirection = moveDirection + cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            moveDirection = moveDirection + Vector3.new(0, 1, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            moveDirection = moveDirection + Vector3.new(0, -1, 0)
-        end
-
-        if moveDirection.Magnitude > 0 then
-            moveDirection = moveDirection.Unit * flySpeed
-        end
-
-        hrp.Velocity = moveDirection
+        if not flyEnabled then return end
+        local moveDir = Vector3.zero
+        local cf = camera.CFrame
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir += cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir -= cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir -= cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir += cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0, 1, 0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir += Vector3.new(0, -1, 0) end
+        bodyVelocity.Velocity = moveDir * flySpeed
+        bodyGyro.CFrame = cf
     end)
 end
 
@@ -1854,6 +1796,14 @@ local function disableFly()
         flyConnection:Disconnect()
         flyConnection = nil
     end
+    if bodyVelocity then
+        bodyVelocity:Destroy()
+        bodyVelocity = nil
+    end
+    if bodyGyro then
+        bodyGyro:Destroy()
+        bodyGyro = nil
+    end
     if player.Character then
         local humanoid = player.Character:FindFirstChild("Humanoid")
         if humanoid then
@@ -1862,7 +1812,7 @@ local function disableFly()
     end
 end
 
--- === UI ===
+-- ===== UI =====
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local Window = WindUI:CreateWindow({
     Title = "Sailor Piece",
@@ -2324,7 +2274,7 @@ FarmTab:Button({
     Title = "Check requirement summon boss",
     Desc = "Check requirement summon boss",
     Locked = false,
-    Callback = showSummonInfoFrame   -- เรียกฟังก์ชันที่เตรียมไว้
+    Callback = showSummonInfoFrame
 })
 
 -- Dropdown เลือกบอส
@@ -2342,7 +2292,6 @@ local bossSummonDropdown = FarmTab:Dropdown({
         elseif option == "Strongest In History" then selectedSummonBoss = "StrongestinHistoryBoss"
         elseif option == "Rimuru" then selectedSummonBoss = "RimuruBoss"
         end
-        -- ไม่มีการเรียก updateSummonInfo
     end
 })
 
@@ -2354,7 +2303,6 @@ local difficultyDropdown = FarmTab:Dropdown({
     Value = "Normal",
     Callback = function(option)
         selectedDifficulty = option
-        -- ไม่มีการเรียก updateSummonInfo
     end
 })
 
@@ -2715,7 +2663,6 @@ local DugeonSection = DugeonTab:Section({
     Icon = "door-open",
 })
 
--- ฟังก์ชัน TP ไปหา NPC Dungeon (ใช้ teleportToNPC ที่ประกาศไว้)
 DugeonTab:Button({
     Title = "TP to Npc Dungeon",
     Desc = "Teleport to Dungeon Portals NPC",
@@ -2726,11 +2673,9 @@ DugeonTab:Button({
 
 DugeonTab:Divider()
 
--- ตัวแปรเก็บ reference ของ Toggle เพื่อใช้ SetValue เมื่อเกิดข้อผิดพลาด
 local autoDungeonToggle
 local autoLeaveToggle
 
--- Dropdown เลือกประเภทดันจ์
 DugeonTab:Dropdown({
     Title = "Select Dungeon",
     Desc = "Select the dungeon you want to auto-dungeon",
@@ -2749,7 +2694,6 @@ DugeonTab:Dropdown({
     end
 })
 
--- Toggle Auto Dungeon
 autoDungeonToggle = DugeonTab:Toggle({
     Title = "Auto Dungeon",
     Desc = "Automatically request dungeon portal every 10 seconds",
@@ -2784,7 +2728,6 @@ autoDungeonToggle = DugeonTab:Toggle({
     end
 })
 
--- Toggle Auto Leave Dungeon
 autoLeaveToggle = DugeonTab:Toggle({
     Title = "Auto Leave Dungeon",
     Desc = "Automatically leave the dungeon every 10 seconds",
@@ -2809,7 +2752,6 @@ autoLeaveToggle = DugeonTab:Toggle({
     end
 })
 
--- ปุ่ม Join Dungeon
 DugeonTab:Button({
     Title = "Join Dungeon",
     Desc = "Teleport to ActiveDungeonPortal and press E",
@@ -2823,7 +2765,6 @@ local InDugeonSection = DugeonTab:Section({
     Icon = "door-closed",
 })
 
--- Dropdown เลือกความยาก
 DugeonTab:Dropdown({
     Title = "Select Difficulty",
     Desc = "Select the difficulty of the dungeon",
@@ -2834,7 +2775,6 @@ DugeonTab:Dropdown({
     end
 })
 
--- Toggle Auto Vote Difficulty
 local autoVoteToggle = DugeonTab:Toggle({
     Title = "Auto Vote Difficulty",
     Desc = "Automatically vote for the selected difficulty",
@@ -2859,7 +2799,6 @@ local autoVoteToggle = DugeonTab:Toggle({
     end
 })
 
--- Toggle Auto Kill Monsters
 local autoKillToggle = DugeonTab:Toggle({
     Title = "Auto kill monsters",
     Desc = "Automatically kill monsters in the dungeon",
@@ -2868,7 +2807,6 @@ local autoKillToggle = DugeonTab:Toggle({
     Value = false,
     Callback = function(state)
         if state then
-            -- เปิด
             if not autoKillDungeonMobsRunning then
                 autoKillDungeonMobsRunning = true
                 spawn(autoKillDungeonMobsLoop)
@@ -2880,19 +2818,15 @@ local autoKillToggle = DugeonTab:Toggle({
                 })
             end
         else
-            -- ปิด: หยุด loop และทำให้ตัวละครลงพื้น
             autoKillDungeonMobsRunning = false
-            
-            -- ถ้ามีตัวละคร ให้ปลดลอยและดันลง
             if hrp then
                 hrp.Anchored = false
-                hrp.Velocity = Vector3.new(0, -50, 0)  -- แรงดึงลงเพื่อให้ตกเร็วขึ้น
+                hrp.Velocity = Vector3.new(0, -50, 0)
             end
         end
     end
 })
 
--- Slider ตั้งค่า % เลือด
 DugeonTab:Slider({
     Title = "Health safety for players.",
     Desc = "Automatically Safe Place: Take the player to a safe place if their health is below this percentage.",
@@ -2907,7 +2841,6 @@ DugeonTab:Slider({
     end
 })
 
--- Toggle Auto Safe Players
 local autoSafeToggle = DugeonTab:Toggle({
     Title = "Auto Safe Players",
     Desc = "Automatically take players to a safe place if their health is below the threshold",
@@ -2931,7 +2864,7 @@ local autoSafeToggle = DugeonTab:Toggle({
         end
     end
 })
--- Toggle Auto Replay
+
 local autoReplayToggle = DugeonTab:Toggle({
     Title = "Auto Replay",
     Desc = "Automatically replay the dungeon if it fails",
@@ -2973,7 +2906,6 @@ BossRushTab:Button({
     Title = "TP to Npc Boss Rush",
     Desc = "Teleport to Boss Rush NPC",
     Callback = function()
-        -- เปลี่ยนชื่อ NPC ตามจริง
         teleportToNPC("BossRushPortalNPC")
     end
 })
@@ -2987,7 +2919,6 @@ BossRushTab:Dropdown({
     Value = "",
     Callback = function(option)
         print("Boss Rush selected:", option)
-        -- ถ้ามี remote หรือฟังก์ชันสำหรับ Boss Rush ให้เรียกที่นี่
     end
 })
 
@@ -3055,7 +2986,7 @@ QuestTab:Toggle({
     Icon = "bird",
     Type = "Checkbox",
     Locked = true,
-    Value = false, -- default value
+    Value = false,
     Callback = function(state) 
         
     end
@@ -3166,15 +3097,6 @@ TPislandTab:Button({
         game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
     end
 })
--- TPislandTab:Button({
---     Title = "TP to Valentine Island",
---     Desc = "Teleport to Valentine Island(Cupid)",
---     Locked = false,
---     Callback = function()
---         local args = { "Valentine" }
---         game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TeleportToPortal"):FireServer(unpack(args))
---     end
--- })
 TPislandTab:Button({
     Title = "TP to Slime Island",
     Desc = "Teleport to Slime Island(8000 - 9000)",
@@ -3204,7 +3126,6 @@ local NPCSection = TPNPCTab:Section({
     Icon = "user-round-search",
 })
 
--- ฟังก์ชันดึงรายชื่อ NPC จาก workspace.ServiceNPCs
 local function getNPCNames()
     local names = {}
     local serviceNPCs = workspace:FindFirstChild("ServiceNPCs")
@@ -3213,14 +3134,12 @@ local function getNPCNames()
             table.insert(names, child.Name)
         end
     end
-    table.sort(names)  -- เรียงตามตัวอักษร
+    table.sort(names)
     return names
 end
 
--- ตัวแปรเก็บ Dropdown เพื่อใช้รีเฟรช
 local npcDropdown
 
--- ปุ่มรีเฟรชรายชื่อ
 TPNPCTab:Button({
     Title = "Refresh NPC List",
     Desc = "Refresh the list of NPCs in the dropdown",
@@ -3246,7 +3165,6 @@ TPNPCTab:Button({
     end
 })
 
--- Dropdown เลือก NPC
 npcDropdown = TPNPCTab:Dropdown({
     Title = "Select NPC",
     Desc = "Select an NPC to teleport to",
@@ -3255,7 +3173,6 @@ npcDropdown = TPNPCTab:Dropdown({
     Callback = function(option)
         if option == "" then return end
 
-        -- ค้นหา NPC ใน workspace.ServiceNPCs
         local npc = workspace:FindFirstChild("ServiceNPCs") and workspace.ServiceNPCs:FindFirstChild(option)
         if not npc then
             WindUI:Notify({
@@ -3267,7 +3184,6 @@ npcDropdown = TPNPCTab:Dropdown({
             return
         end
 
-        -- หา HumanoidRootPart ของผู้เล่น
         if not hrp then
             local char = player.Character
             if char then
@@ -3284,9 +3200,8 @@ npcDropdown = TPNPCTab:Dropdown({
             return
         end
 
-        -- ได้ตำแหน่งของ NPC (ใช้ GetPivot() รองรับทั้ง Model และ BasePart)
         local targetCF = npc:GetPivot()
-        hrp.CFrame = targetCF * CFrame.new(0, 3, 0)  -- ยกสูงขึ้นเล็กน้อย
+        hrp.CFrame = targetCF * CFrame.new(0, 3, 0)
 
         WindUI:Notify({
             Title = "Teleported",
@@ -3559,45 +3474,42 @@ local PlayersTab = SettingSection:Tab({
 })
 
 -- Walk Speed
-local walkSpeedSlider
-local walkSpeedToggle
+local speedSlider
+local speedToggle
 
-walkSpeedSlider = PlayersTab:Slider({
+speedSlider = PlayersTab:Slider({
     Title = "Set walk speed",
     Desc = "Set the walk speed of your character.",
     Step = 1,
     Value = {
         Min = 16,
         Max = 500,
-        Default = 16,
+        Default = 30,
     },
     Callback = function(value)
-        customWalkSpeed = value
-        if walkSpeedEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-            player.Character.Humanoid.WalkSpeed = customWalkSpeed
+        speedValue = value
+        if speedToggleState and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = speedValue
         end
     end
 })
 
-walkSpeedToggle = PlayersTab:Toggle({
+speedToggle = PlayersTab:Toggle({
     Title = "Toggle Walk Speed",
     Desc = "Toggle to apply the custom walk speed",
     Icon = "bird",
     Type = "Checkbox",
     Value = false,
     Callback = function(state)
+        speedToggleState = state
         if state then
-            -- เปิด: บันทึกค่าเริ่มต้นจาก Humanoid
             if player.Character and player.Character:FindFirstChild("Humanoid") then
-                local humanoid = player.Character.Humanoid
-                defaultWalkSpeed = humanoid.WalkSpeed
-                walkSpeedSlider:SetValue(defaultWalkSpeed)  -- อัปเดต slider
-                customWalkSpeed = defaultWalkSpeed
+                if defaultWalkSpeed == 16 then
+                    defaultWalkSpeed = player.Character.Humanoid.WalkSpeed
+                end
+                player.Character.Humanoid.WalkSpeed = speedValue
             end
-            walkSpeedEnabled = true
         else
-            -- ปิด: คืนค่าเริ่มต้น
-            walkSpeedEnabled = false
             if player.Character and player.Character:FindFirstChild("Humanoid") then
                 player.Character.Humanoid.WalkSpeed = defaultWalkSpeed
             end
@@ -3606,10 +3518,10 @@ walkSpeedToggle = PlayersTab:Toggle({
 })
 
 -- Jump Power
-local jumpPowerSlider
-local jumpPowerToggle
+local jumpSlider
+local jumpToggle
 
-jumpPowerSlider = PlayersTab:Slider({
+jumpSlider = PlayersTab:Slider({
     Title = "Set Jump Power",
     Desc = "Set the jump power of your character.",
     Step = 1,
@@ -3619,30 +3531,29 @@ jumpPowerSlider = PlayersTab:Slider({
         Default = 50,
     },
     Callback = function(value)
-        customJumpPower = value
-        if jumpPowerEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-            player.Character.Humanoid.JumpPower = customJumpPower
+        jumpValue = value
+        if jumpToggleState and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.JumpPower = jumpValue
         end
     end
 })
 
-jumpPowerToggle = PlayersTab:Toggle({
+jumpToggle = PlayersTab:Toggle({
     Title = "Toggle Jump Power",
     Desc = "Toggle to apply the custom jump power",
     Icon = "bird",
     Type = "Checkbox",
     Value = false,
     Callback = function(state)
+        jumpToggleState = state
         if state then
             if player.Character and player.Character:FindFirstChild("Humanoid") then
-                local humanoid = player.Character.Humanoid
-                defaultJumpPower = humanoid.JumpPower
-                jumpPowerSlider:SetValue(defaultJumpPower)
-                customJumpPower = defaultJumpPower
+                if defaultJumpPower == 50 then
+                    defaultJumpPower = player.Character.Humanoid.JumpPower
+                end
+                player.Character.Humanoid.JumpPower = jumpValue
             end
-            jumpPowerEnabled = true
         else
-            jumpPowerEnabled = false
             if player.Character and player.Character:FindFirstChild("Humanoid") then
                 player.Character.Humanoid.JumpPower = defaultJumpPower
             end
@@ -3650,24 +3561,7 @@ jumpPowerToggle = PlayersTab:Toggle({
     end
 })
 
--- -- Infinite Jump
--- local infiniteJumpToggle = PlayersTab:Toggle({
---     Title = "Toggle Infinite Jump",
---     Desc = "Toggle to enable infinite jumping",
---     Icon = "bird",
---     Type = "Checkbox",
---     Value = false,
---     Callback = function(state)
---         infiniteJumpEnabled = state
---         if state then
---             enableInfiniteJump()
---         else
---             disableInfiniteJump()
---         end
---     end
--- })
-
--- NoClip (ใช้ฟังก์ชัน enableNoclip / disableNoclip ที่มีอยู่แล้ว)
+-- NoClip
 PlayersTab:Toggle({
     Title = "Toggle NoClip",
     Desc = "Toggle to enable noclip",
@@ -3717,7 +3611,7 @@ local flyToggle = PlayersTab:Toggle({
     end
 })
 
--- UI Keybind Tab (คงเดิม)
+-- UI Keybind Tab
 local Tab = SettingSection:Tab({
     Title = "Ui",
     Icon = "settings",
