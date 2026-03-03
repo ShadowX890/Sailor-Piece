@@ -293,12 +293,12 @@ local defaultWalkSpeed = 16  -- เก็บค่าเริ่มต้นข
 local jumpPowerEnabled = false
 local customJumpPower = 50
 local defaultJumpPower = 50
-local infiniteJumpEnabled = false
+--local infiniteJumpEnabled = false
 local noclipEnabled = false
 local flyEnabled = false
 local flySpeed = 20
 local flyConnection = nil
-local infiniteJumpConnection = nil
+--local infiniteJumpConnection = nil
 local UserInputService = game:GetService("UserInputService")
 
 -- =======================================
@@ -1787,22 +1787,22 @@ local function autoSlimePieceLoop()
 end
 
 -- Infinite Jump
-local function enableInfiniteJump()
-    if infiniteJumpConnection then return end
-    infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
-        if infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
-            local humanoid = player.Character.Humanoid
-            humanoid:ChangeState("Jumping")
-        end
-    end)
-end
+-- local function enableInfiniteJump()
+--     if infiniteJumpConnection then return end
+--     infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
+--         if infiniteJumpEnabled and player.Character and player.Character:FindFirstChild("Humanoid") then
+--             local humanoid = player.Character.Humanoid
+--             humanoid:ChangeState("Jumping")
+--         end
+--     end)
+-- end
 
-local function disableInfiniteJump()
-    if infiniteJumpConnection then
-        infiniteJumpConnection:Disconnect()
-        infiniteJumpConnection = nil
-    end
-end
+-- local function disableInfiniteJump()
+--     if infiniteJumpConnection then
+--         infiniteJumpConnection:Disconnect()
+--         infiniteJumpConnection = nil
+--     end
+-- end
 
 -- Fly
 local function enableFly()
@@ -3650,22 +3650,22 @@ jumpPowerToggle = PlayersTab:Toggle({
     end
 })
 
--- Infinite Jump
-local infiniteJumpToggle = PlayersTab:Toggle({
-    Title = "Toggle Infinite Jump",
-    Desc = "Toggle to enable infinite jumping",
-    Icon = "bird",
-    Type = "Checkbox",
-    Value = false,
-    Callback = function(state)
-        infiniteJumpEnabled = state
-        if state then
-            enableInfiniteJump()
-        else
-            disableInfiniteJump()
-        end
-    end
-})
+-- -- Infinite Jump
+-- local infiniteJumpToggle = PlayersTab:Toggle({
+--     Title = "Toggle Infinite Jump",
+--     Desc = "Toggle to enable infinite jumping",
+--     Icon = "bird",
+--     Type = "Checkbox",
+--     Value = false,
+--     Callback = function(state)
+--         infiniteJumpEnabled = state
+--         if state then
+--             enableInfiniteJump()
+--         else
+--             disableInfiniteJump()
+--         end
+--     end
+-- })
 
 -- NoClip (ใช้ฟังก์ชัน enableNoclip / disableNoclip ที่มีอยู่แล้ว)
 PlayersTab:Toggle({
